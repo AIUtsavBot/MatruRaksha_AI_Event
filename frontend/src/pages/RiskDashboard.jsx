@@ -1,5 +1,6 @@
 // FILE: frontend/src/pages/RiskDashboard.jsx
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 // Simple API calls without external library
@@ -33,6 +34,7 @@ const apiCall = async (method, endpoint, data = null) => {
 }
 
 export default function RiskDashboard() {
+  const { t, i18n } = useTranslation()
   const [activeTab, setActiveTab] = useState('dashboard')
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('maatruDarkMode')
@@ -444,7 +446,7 @@ export default function RiskDashboard() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <div>
             <h1 style={{ color: darkMode ? '#fff' : '#1f2937', marginBottom: '8px' }}>🏥 MaatruRaksha AI</h1>
-            <p style={{ color: darkMode ? '#9ca3af' : '#6b7280', marginBottom: '0' }}>Maternal Health Monitoring System</p>
+            <p style={{ color: darkMode ? '#9ca3af' : '#6b7280', marginBottom: '0' }}>{t('maternal_system')}</p>
           </div>
           <button
             onClick={() => setDarkMode(!darkMode)}
@@ -459,9 +461,9 @@ export default function RiskDashboard() {
               transition: 'all 0.3s',
               boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
             }}
-            title={darkMode ? 'Light Mode' : 'Dark Mode'}
+            title={darkMode ? t('light_mode') : t('dark_mode')}
           >
-            {darkMode ? '☀️ Light' : '🌙 Dark'}
+            {darkMode ? `☀️ ${t('light')}` : `🌙 ${t('dark')}`}
           </button>
         </div>
 
@@ -498,10 +500,10 @@ export default function RiskDashboard() {
           transition: 'background 0.3s'
         }}>
           {[
-            { id: 'dashboard', label: '📊 Dashboard' },
-            { id: 'register', label: '➕ Register' },
-            { id: 'risk-assessment', label: '⚠️ Risk Assessment' },
-            { id: 'all-mothers', label: '👥 All Mothers' }
+            { id: 'dashboard', label: `📊 ${t('dashboard')}` },
+            { id: 'register', label: `➕ ${t('register')}` },
+            { id: 'risk-assessment', label: `⚠️ ${t('risk_assessment')}` },
+            { id: 'all-mothers', label: `👥 ${t('all_mothers')}` }
           ].map(tab => (
             <button
               key={tab.id}
@@ -538,7 +540,7 @@ export default function RiskDashboard() {
                 borderRadius: '8px',
                 color: 'white'
               }}>
-                <h2 style={{ margin: 0, fontSize: '20px' }}>📈 Health Analytics</h2>
+                <h2 style={{ margin: 0, fontSize: '20px' }}>📈 {t('health_analytics')}</h2>
                 <div style={{
                   background: 'rgba(255,255,255,0.2)',
                   padding: '10px 16px',
@@ -546,7 +548,7 @@ export default function RiskDashboard() {
                   fontSize: '16px',
                   fontWeight: '600'
                 }}>
-                  Total Mothers: <strong>{analytics.totalMothers}</strong>
+                  {t('total_mothers')}: <strong>{analytics.totalMothers}</strong>
                 </div>
               </div>
 
@@ -562,7 +564,7 @@ export default function RiskDashboard() {
                   borderLeft: '4px solid #ef4444',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                 }}>
-                  <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginBottom: '12px' }}>🔴 HIGH RISK</div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginBottom: '12px' }}>🔴 {t('high_risk')}</div>
                   <div style={{ fontSize: '40px', fontWeight: '700', color: '#ef4444' }}>{analytics.highRiskCount}</div>
                 </div>
 
@@ -573,7 +575,7 @@ export default function RiskDashboard() {
                   borderLeft: '4px solid #f59e0b',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                 }}>
-                  <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginBottom: '12px' }}>🟡 MODERATE RISK</div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginBottom: '12px' }}>🟡 {t('moderate_risk')}</div>
                   <div style={{ fontSize: '40px', fontWeight: '700', color: '#f59e0b' }}>{analytics.moderateRiskCount}</div>
                 </div>
 
@@ -584,7 +586,7 @@ export default function RiskDashboard() {
                   borderLeft: '4px solid #10b981',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                 }}>
-                  <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginBottom: '12px' }}>🟢 LOW RISK</div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginBottom: '12px' }}>🟢 {t('low_risk')}</div>
                   <div style={{ fontSize: '40px', fontWeight: '700', color: '#10b981' }}>{analytics.lowRiskCount}</div>
                 </div>
 
@@ -595,7 +597,7 @@ export default function RiskDashboard() {
                   borderLeft: '4px solid #3b82f6',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                 }}>
-                  <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginBottom: '12px' }}>📋 TOTAL ASSESSMENTS</div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginBottom: '12px' }}>📋 {t('total_assessments')}</div>
                   <div style={{ fontSize: '40px', fontWeight: '700', color: '#3b82f6' }}>{analytics.totalAssessments}</div>
                 </div>
               </div>
@@ -611,7 +613,7 @@ export default function RiskDashboard() {
                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                 transition: 'background 0.3s'
               }}>
-                <h3 style={{ color: darkMode ? '#fff' : '#1f2937', marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>📊 Risk Trend (Last 7 Days)</h3>
+                <h3 style={{ color: darkMode ? '#fff' : '#1f2937', marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>📊 {t('risk_trend')}</h3>
                 {riskTrend.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={riskTrend} margin={{ top: 20, right: 30, left: 0, bottom: 60 }}>
@@ -620,13 +622,13 @@ export default function RiskDashboard() {
                       <YAxis tick={{ fontSize: 12 }} />
                       <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
                       <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                      <Bar dataKey="HIGH" stackId="a" fill={COLORS.HIGH} name="High Risk" />
-                      <Bar dataKey="MODERATE" stackId="a" fill={COLORS.MODERATE} name="Moderate Risk" />
-                      <Bar dataKey="LOW" stackId="a" fill={COLORS.LOW} name="Low Risk" />
+                      <Bar dataKey="HIGH" stackId="a" fill={COLORS.HIGH} name={t('high_risk')} />
+                      <Bar dataKey="MODERATE" stackId="a" fill={COLORS.MODERATE} name={t('moderate_risk')} />
+                      <Bar dataKey="LOW" stackId="a" fill={COLORS.LOW} name={t('low_risk')} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <p style={{ color: '#6b7280', textAlign: 'center', padding: '40px 0' }}>No assessment data available</p>
+                  <p style={{ color: '#6b7280', textAlign: 'center', padding: '40px 0' }}>{t('no_assessment_data')}</p>
                 )}
               </div>
 
@@ -639,7 +641,7 @@ export default function RiskDashboard() {
                   boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                   transition: 'background 0.3s'
                 }}>
-                  <h3 style={{ color: darkMode ? '#fff' : '#1f2937', marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>👶 Age Distribution</h3>
+                  <h3 style={{ color: darkMode ? '#fff' : '#1f2937', marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>👶 {t('age_distribution')}</h3>
                   {ageDistribution.some(d => d.value > 0) ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
@@ -652,7 +654,7 @@ export default function RiskDashboard() {
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
-                    <p style={{ color: '#6b7280', textAlign: 'center', padding: '40px 0' }}>No data available</p>
+                    <p style={{ color: '#6b7280', textAlign: 'center', padding: '40px 0' }}>{t('no_data')}</p>
                   )}
                 </div>
 
@@ -663,15 +665,15 @@ export default function RiskDashboard() {
                   boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                   transition: 'background 0.3s'
                 }}>
-                  <h3 style={{ color: darkMode ? '#fff' : '#1f2937', marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>⚠️ Overall Risk Distribution</h3>
+                  <h3 style={{ color: darkMode ? '#fff' : '#1f2937', marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>⚠️ {t('overall_risk_distribution')}</h3>
                   {analytics && (analytics.highRiskCount + analytics.moderateRiskCount + analytics.lowRiskCount) > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
                         <Pie
                           data={[
-                            { name: 'High Risk', value: analytics.highRiskCount },
-                            { name: 'Moderate Risk', value: analytics.moderateRiskCount },
-                            { name: 'Low Risk', value: analytics.lowRiskCount }
+                            { name: t('high_risk'), value: analytics.highRiskCount },
+                            { name: t('moderate_risk'), value: analytics.moderateRiskCount },
+                            { name: t('low_risk'), value: analytics.lowRiskCount }
                           ]}
                           dataKey="value"
                           cx="50%"
@@ -687,7 +689,7 @@ export default function RiskDashboard() {
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
-                    <p style={{ color: '#6b7280', textAlign: 'center', padding: '40px 0' }}>No data available</p>
+                    <p style={{ color: '#6b7280', textAlign: 'center', padding: '40px 0' }}>{t('no_data')}</p>
                   )}
                 </div>
               </div>
@@ -700,7 +702,7 @@ export default function RiskDashboard() {
                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                 transition: 'background 0.3s'
               }}>
-                <h3 style={{ color: darkMode ? '#fff' : '#1f2937', marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>💓 Average Vital Signs vs Normal Range</h3>
+                <h3 style={{ color: darkMode ? '#fff' : '#1f2937', marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>💓 {t('avg_vitals_vs_normal')}</h3>
                 {vitalStats.some(v => v.value > 0) ? (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={vitalStats} margin={{ top: 20, right: 30, left: 0, bottom: 100 }}>
@@ -709,12 +711,12 @@ export default function RiskDashboard() {
                       <YAxis tick={{ fontSize: 12 }} />
                       <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
                       <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                      <Bar dataKey="value" fill={COLORS.primary} name="Average Value" />
-                      <Bar dataKey="normal" fill={COLORS.secondary} name="Normal Range" />
+                      <Bar dataKey="value" fill={COLORS.primary} name={t('average_value')} />
+                      <Bar dataKey="normal" fill={COLORS.secondary} name={t('normal_range')} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <p style={{ color: '#6b7280', textAlign: 'center', padding: '40px 0' }}>No vital signs data available</p>
+                  <p style={{ color: '#6b7280', textAlign: 'center', padding: '40px 0' }}>{t('no_vitals')}</p>
                 )}
               </div>
 
@@ -736,7 +738,7 @@ export default function RiskDashboard() {
                     transition: 'all 0.3s'
                   }}
                 >
-                  {chartsLoading ? '⏳ Refreshing...' : '🔄 Refresh Analytics'}
+                  {chartsLoading ? `⏳ ${t('refreshing')}` : `🔄 ${t('refresh_analytics')}`}
                 </button>
               </div>
             </div>
@@ -753,35 +755,35 @@ export default function RiskDashboard() {
             maxWidth: '600px',
             transition: 'background 0.3s'
           }}>
-            <h2 style={{ marginBottom: '8px', color: darkMode ? '#fff' : '#1f2937' }}>📝 Register Pregnant Mother</h2>
-            <p style={{ color: darkMode ? '#9ca3af' : '#6b7280', marginBottom: '20px', fontSize: '14px' }}>Add a new mother to the system (data saved to Supabase)</p>
+            <h2 style={{ marginBottom: '8px', color: darkMode ? '#fff' : '#1f2937' }}>📝 {t('register_pregnant_mother')}</h2>
+            <p style={{ color: darkMode ? '#9ca3af' : '#6b7280', marginBottom: '20px', fontSize: '14px' }}>{t('register_helptext')}</p>
 
             <form onSubmit={handleRegisterSubmit}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: darkMode ? '#e5e7eb' : '#374151' }}>Full Name *</label>
-                  <input type="text" name="name" placeholder="e.g., Priya Sharma" value={registerForm.name} onChange={handleRegisterChange} required style={{ width: '100%', padding: '10px 12px', border: `1px solid ${darkMode ? '#404854' : '#d1d5db'}`, borderRadius: '6px', fontSize: '14px', background: darkMode ? '#1a1a2e' : '#fff', color: darkMode ? '#fff' : '#000' }} />
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: darkMode ? '#e5e7eb' : '#374151' }}>{t('full_name')} *</label>
+                  <input type="text" name="name" placeholder={t('full_name_placeholder')} value={registerForm.name} onChange={handleRegisterChange} required style={{ width: '100%', padding: '10px 12px', border: `1px solid ${darkMode ? '#404854' : '#d1d5db'}`, borderRadius: '6px', fontSize: '14px', background: darkMode ? '#1a1a2e' : '#fff', color: darkMode ? '#fff' : '#000' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>📱 Phone Number *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>📱 {t('phone_number')} *</label>
                   <input type="tel" name="phone" placeholder="9876543210" value={registerForm.phone} onChange={handleRegisterChange} required style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }} />
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>👤 Age (years) *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>👤 {t('age_years')} *</label>
                   <input type="number" name="age" placeholder="28" value={registerForm.age} onChange={handleRegisterChange} required style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>⚖️ BMI *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>⚖️ {t('bmi')} *</label>
                   <input type="number" name="bmi" placeholder="22.5" step="0.1" value={registerForm.bmi} onChange={handleRegisterChange} required style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }} />
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>Gravida</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>{t('gravida')}</label>
                   <select name="gravida" value={registerForm.gravida} onChange={handleRegisterChange} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }}>
                     <option>Gravida 1</option>
                     <option>Gravida 2</option>
@@ -789,7 +791,7 @@ export default function RiskDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>Parity</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>{t('parity')}</label>
                   <select name="parity" value={registerForm.parity} onChange={handleRegisterChange} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }}>
                     <option>Parity 0</option>
                     <option>Parity 1</option>
@@ -799,13 +801,13 @@ export default function RiskDashboard() {
               </div>
 
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>📍 Location *</label>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>📍 {t('location')} *</label>
                 <input type="text" name="location" placeholder="e.g., Dharavi, Mumbai" value={registerForm.location} onChange={handleRegisterChange} required style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>🌍 Preferred Language</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>🌍 {t('preferred_language')}</label>
                   <select name="preferred_language" value={registerForm.preferred_language} onChange={handleRegisterChange} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }}>
                     <option value="en">English</option>
                     <option value="mr">Marathi</option>
@@ -813,13 +815,13 @@ export default function RiskDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>💬 Telegram Chat ID</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>💬 {t('telegram_chat_id')}</label>
                   <input type="text" name="telegram_chat_id" placeholder="Optional: Chat ID" value={registerForm.telegram_chat_id} onChange={handleRegisterChange} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }} />
                 </div>
               </div>
 
               <button type="submit" disabled={loading} style={{ width: '100%', padding: '12px', background: '#667eea', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '600', fontSize: '14px', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
-                {loading ? 'Registering...' : 'Register Mother'}
+                {loading ? t('registering') : t('register_mother')}
               </button>
             </form>
           </div>
@@ -834,13 +836,13 @@ export default function RiskDashboard() {
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
             maxWidth: '600px'
           }}>
-            <h2 style={{ marginBottom: '16px', color: '#1f2937' }}>⚕️ Risk Assessment</h2>
+            <h2 style={{ marginBottom: '16px', color: '#1f2937' }}>⚕️ {t('risk_assessment')}</h2>
 
             <form onSubmit={handleAssessRisk}>
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>Select Mother *</label>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>{t('select_mother')} *</label>
                 <select name="mother_id" value={assessmentForm.mother_id} onChange={handleAssessmentChange} required style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }}>
-                  <option value="">Choose a mother...</option>
+                  <option value="">{t('choose_mother')}</option>
                   {mothers.map(mother => (
                     <option key={mother.id} value={mother.id}>{mother.name} ({mother.phone})</option>
                   ))}
@@ -849,28 +851,28 @@ export default function RiskDashboard() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>Systolic BP (mmHg)</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>{t('systolic_bp')}</label>
                   <input type="number" name="systolic_bp" placeholder="120" value={assessmentForm.systolic_bp} onChange={handleAssessmentChange} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>Diastolic BP (mmHg)</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>{t('diastolic_bp')}</label>
                   <input type="number" name="diastolic_bp" placeholder="80" value={assessmentForm.diastolic_bp} onChange={handleAssessmentChange} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }} />
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>Heart Rate (bpm)</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>{t('heart_rate')}</label>
                   <input type="number" name="heart_rate" placeholder="80" value={assessmentForm.heart_rate} onChange={handleAssessmentChange} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>Blood Glucose (mg/dL)</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '6px', color: '#374151' }}>{t('blood_glucose')}</label>
                   <input type="number" name="blood_glucose" placeholder="100" value={assessmentForm.blood_glucose} onChange={handleAssessmentChange} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }} />
                 </div>
               </div>
 
               <div style={{ marginBottom: '16px' }}>
-                <h4 style={{ color: '#1f2937', marginBottom: '12px', fontWeight: '600' }}>Clinical Symptoms (Optional)</h4>
+                <h4 style={{ color: '#1f2937', marginBottom: '12px', fontWeight: '600' }}>{t('clinical_symptoms_optional')}</h4>
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -880,12 +882,12 @@ export default function RiskDashboard() {
                   borderRadius: '6px'
                 }}>
                   {[
-                    { key: 'proteinuria', label: 'Proteinuria' },
-                    { key: 'edema', label: 'Edema' },
-                    { key: 'headache', label: 'Headache' },
-                    { key: 'vision_changes', label: 'Vision Changes' },
-                    { key: 'epigastric_pain', label: 'Epigastric Pain' },
-                    { key: 'vaginal_bleeding', label: 'Vaginal Bleeding' }
+                    { key: 'proteinuria', label: t('proteinuria') },
+                    { key: 'edema', label: t('edema') },
+                    { key: 'headache', label: t('headache') },
+                    { key: 'vision_changes', label: t('vision_changes') },
+                    { key: 'epigastric_pain', label: t('epigastric_pain') },
+                    { key: 'vaginal_bleeding', label: t('vaginal_bleeding') }
                   ].map(symptom => (
                     <label key={symptom.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
                       <input
@@ -906,7 +908,7 @@ export default function RiskDashboard() {
               </div>
 
               <button type="submit" disabled={loading} style={{ width: '100%', padding: '12px', background: '#667eea', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '600', fontSize: '14px', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
-                {loading ? 'Assessing...' : 'Assess Risk'}
+                {loading ? t('assessing') : t('assess_risk')}
               </button>
             </form>
 
@@ -919,10 +921,10 @@ export default function RiskDashboard() {
                 borderRadius: '6px',
                 color: '#166534'
               }}>
-                <h3 style={{ margin: '0 0 12px 0' }}>✅ Risk Assessment Result</h3>
-                <p><strong>Risk Score:</strong> {(riskResult.risk_score * 100).toFixed(1)}%</p>
-                <p><strong>Risk Level:</strong> {riskResult.risk_level}</p>
-                <p><strong>Risk Factors:</strong> {riskResult.risk_factors?.join(', ') || 'None'}</p>
+                <h3 style={{ margin: '0 0 12px 0' }}>✅ {t('risk_assessment_result')}</h3>
+                <p><strong>{t('risk_score')}:</strong> {(riskResult.risk_score * 100).toFixed(1)}%</p>
+                <p><strong>{t('risk_level')}:</strong> {riskResult.risk_level}</p>
+                <p><strong>{t('risk_factors')}:</strong> {riskResult.risk_factors?.join(', ') || t('none')}</p>
               </div>
             )}
           </div>
@@ -936,9 +938,9 @@ export default function RiskDashboard() {
             borderRadius: '8px',
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
           }}>
-            <h2 style={{ marginBottom: '16px', color: '#1f2937' }}>👥 All Registered Mothers - Complete Details</h2>
+            <h2 style={{ marginBottom: '16px', color: '#1f2937' }}>👥 {t('all_registered_mothers')}</h2>
             {mothers.length === 0 ? (
-              <p style={{ color: '#6b7280' }}>No mothers registered yet</p>
+              <p style={{ color: '#6b7280' }}>{t('no_mothers')}</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {mothers.map(mother => {
@@ -1033,51 +1035,51 @@ export default function RiskDashboard() {
                           background: 'white'
                         }}>
                           <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #e5e7eb' }}>
-                            <h4 style={{ margin: '0 0 12px 0', color: '#1f2937', fontSize: '14px', fontWeight: '600' }}>
-                              📋 Complete Mother Details
+                          <h4 style={{ margin: '0 0 12px 0', color: '#1f2937', fontSize: '14px', fontWeight: '600' }}>
+                              📋 {t('complete_mother_details')}
                             </h4>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '13px' }}>
                               <div style={{ background: '#f3f4f6', padding: '10px', borderRadius: '6px' }}>
-                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>Name</div>
+                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>{t('name')}</div>
                                 <div style={{ color: '#1f2937' }}>{mother.name}</div>
                               </div>
                               <div style={{ background: '#f3f4f6', padding: '10px', borderRadius: '6px' }}>
-                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>Phone</div>
+                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>{t('phone')}</div>
                                 <div style={{ color: '#1f2937' }}>{mother.phone}</div>
                               </div>
                               <div style={{ background: '#f3f4f6', padding: '10px', borderRadius: '6px' }}>
-                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>Age</div>
+                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>{t('age')}</div>
                                 <div style={{ color: '#1f2937' }}>{mother.age} years</div>
                               </div>
                               <div style={{ background: '#f3f4f6', padding: '10px', borderRadius: '6px' }}>
-                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>BMI</div>
+                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>{t('bmi')}</div>
                                 <div style={{ color: '#1f2937' }}>{mother.bmi}</div>
                               </div>
                               <div style={{ background: '#f3f4f6', padding: '10px', borderRadius: '6px' }}>
-                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>Gravida</div>
+                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>{t('gravida')}</div>
                                 <div style={{ color: '#1f2937' }}>{mother.gravida}</div>
                               </div>
                               <div style={{ background: '#f3f4f6', padding: '10px', borderRadius: '6px' }}>
-                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>Parity</div>
+                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>{t('parity')}</div>
                                 <div style={{ color: '#1f2937' }}>{mother.parity}</div>
                               </div>
                               <div style={{ background: '#f3f4f6', padding: '10px', borderRadius: '6px' }}>
-                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>Location</div>
+                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>{t('location')}</div>
                                 <div style={{ color: '#1f2937' }}>{mother.location}</div>
                               </div>
                               <div style={{ background: '#f3f4f6', padding: '10px', borderRadius: '6px' }}>
-                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>Language</div>
+                                <div style={{ color: '#6b7280', fontWeight: '600', marginBottom: '4px' }}>{t('language')}</div>
                                 <div style={{ color: '#1f2937' }}>{mother.preferred_language === 'en' ? 'English' : mother.preferred_language === 'mr' ? 'Marathi' : 'Hindi'}</div>
                               </div>
                             </div>
                           </div>
 
                           <h4 style={{ margin: '0 0 12px 0', color: '#1f2937', fontSize: '14px', fontWeight: '600' }}>
-                            📊 Assessment History ({assessments.length})
+                            📊 {t('assessment_history')} ({assessments.length})
                           </h4>
                           
                           {assessments.length === 0 ? (
-                            <p style={{ color: '#6b7280', margin: '0', fontSize: '14px' }}>No assessments recorded</p>
+                            <p style={{ color: '#6b7280', margin: '0', fontSize: '14px' }}>{t('no_assessments_recorded')}</p>
                           ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                               {assessments.map((assessment, idx) => {
@@ -1105,10 +1107,10 @@ export default function RiskDashboard() {
                                         📅 {new Date(assessment.created_at).toLocaleDateString()} at {new Date(assessment.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                       </div>
                                       <div style={{ fontSize: '13px', color: riskColorInner.color, lineHeight: '1.6' }}>
-                                        <div><strong>BP:</strong> {assessment.systolic_bp}/{assessment.diastolic_bp} mmHg</div>
-                                        <div><strong>HR:</strong> {assessment.heart_rate} bpm</div>
-                                        <div><strong>Glucose:</strong> {assessment.blood_glucose} mg/dL</div>
-                                        <div><strong>Hemoglobin:</strong> {assessment.hemoglobin} g/dL</div>
+                                        <div><strong>{t('bp')}:</strong> {assessment.systolic_bp}/{assessment.diastolic_bp} mmHg</div>
+                                        <div><strong>{t('hr')}:</strong> {assessment.heart_rate} bpm</div>
+                                        <div><strong>{t('glucose')}:</strong> {assessment.blood_glucose} mg/dL</div>
+                                        <div><strong>{t('hemoglobin')}:</strong> {assessment.hemoglobin} g/dL</div>
                                       </div>
                                     </div>
                                     

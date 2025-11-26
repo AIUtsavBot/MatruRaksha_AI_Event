@@ -94,12 +94,20 @@ class OrchestratorAgent:
     def _load_agents(self):
         """Lazy load agents when needed"""
         try:
-            from agents.asha_agent import AshaAgent
-            from agents.care_agent import CareAgent
-            from agents.emergency_agent import EmergencyAgent
-            from agents.medication_agent import MedicationAgent
-            from agents.nutrition_agent import NutritionAgent
-            from agents.risk_agent import RiskAgent
+            try:
+                from backend.agents.asha_agent import AshaAgent
+                from backend.agents.care_agent import CareAgent
+                from backend.agents.emergency_agent import EmergencyAgent
+                from backend.agents.medication_agent import MedicationAgent
+                from backend.agents.nutrition_agent import NutritionAgent
+                from backend.agents.risk_agent import RiskAgent
+            except ImportError:
+                from asha_agent import AshaAgent
+                from care_agent import CareAgent
+                from emergency_agent import EmergencyAgent
+                from medication_agent import MedicationAgent
+                from nutrition_agent import NutritionAgent
+                from risk_agent import RiskAgent
             
             self.agents = {
                 AgentType.ASHA: AshaAgent(),
@@ -157,7 +165,7 @@ class OrchestratorAgent:
     def _ai_classify(self, message: str) -> Optional[AgentType]:
         """Use Gemini AI for intent classification (fast)"""
         try:
-            model = genai.GenerativeModel('gemini-2 .5-flash')
+            model = genai.GenerativeModel('gemini-2.5-flash')
             
             prompt = f"""
 Classify this maternal health message into ONE category:
@@ -223,10 +231,12 @@ Respond with ONLY the category name (one word).
         # Route to agent
         try:
             logger.info(f"📤 Routing to {agent_type.value}")
+            lang = mother_context.get('preferred_language', 'en')
             response = await agent.process_query(
                 query=message,
                 mother_context=mother_context,
-                reports_context=reports_context
+                reports_context=reports_context,
+                language=lang
             )
             return response
         except Exception as e:

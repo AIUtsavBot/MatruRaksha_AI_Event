@@ -26,13 +26,22 @@ from telegram.ext import (
     CallbackQueryHandler,
 )
 
-from services.supabase_service import (
-    get_mothers_by_telegram_id,
-    get_recent_reports_for_mother,
-    supabase,
-)
-from agents.orchestrator import route_message
-from services.memory_service import save_chat_history
+try:
+    from backend.services.supabase_service import (
+        get_mothers_by_telegram_id,
+        get_recent_reports_for_mother,
+        supabase,
+    )
+    from backend.agents.orchestrator import route_message
+    from backend.services.memory_service import save_chat_history
+except ImportError:
+    from services.supabase_service import (
+        get_mothers_by_telegram_id,
+        get_recent_reports_for_mother,
+        supabase,
+    )
+    from agents.orchestrator import route_message
+    from services.memory_service import save_chat_history
 
 logger = logging.getLogger(__name__)
 
@@ -187,6 +196,13 @@ async def send_home_dashboard(
     name = mother.get("name") or "Mother"
     location = mother.get("location") or "Not set"
 
+    # Extract ASHA worker details if present on the mother record
+    asha_name = mother.get("asha_name") or mother.get("asha_worker_name")
+    asha_phone = mother.get("asha_phone") or mother.get("asha_worker_phone")
+    if not asha_name and isinstance(mother.get("asha_worker"), dict):
+        asha_name = mother["asha_worker"].get("name")
+        asha_phone = asha_phone or mother["asha_worker"].get("phone")
+
     lines = [
         f"👋 *Welcome back, {name}!*",
         "",
@@ -195,6 +211,8 @@ async def send_home_dashboard(
         f"📍 *Location:* {location}",
         f"📅 *Due Date:* {due_line}",
         f"🤰 *Pregnancy:* {pregnancy_line}" if pregnancy_line else "",
+        (f"🧑‍⚕️ *ASHA Worker:* {asha_name} ({asha_phone})" if asha_name and asha_phone else
+         f"🧑‍⚕️ *ASHA Worker:* {asha_name}" if asha_name else ""),
         "",
         "Use the buttons below to view your health summary, upload documents, "
         "or switch between registered mothers.",
@@ -708,14 +726,27 @@ async def finalize_registration(target, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         res = supabase.table("mothers").insert(payload).execute()
+        mother = res.data[0] if hasattr(res, 'data') and res.data else None
+        assigned = None
+        if mother:
+            try:
+                from backend.services.supabase_service import DatabaseService
+            except ImportError:
+                from services.supabase_service import DatabaseService
+            assigned = DatabaseService.assign_asha_worker_to_mother(mother.get('id'), mother.get('location'))
+            DatabaseService.assign_doctor_to_mother(mother.get('id'), mother.get('location'))
         # // Clear registration state flags and temp data
         context.chat_data['registration_active'] = False
         context.chat_data['agents_suspended'] = False
         context.user_data.pop('registration_data', None)
 
-        await target.reply_text("✅ Registration saved! Loading your dashboard...")
+        if assigned and isinstance(assigned, dict):
+            msg = f"✅ Registration Complete. Your Assigned ASHA Worker is: {assigned.get('name')} ({assigned.get('phone')})."
+        else:
+            msg = "✅ Registration saved!"
+        await target.reply_text(msg)
         mothers = await get_mothers_by_telegram_id(chat_id) if callable(get_mothers_by_telegram_id) else None
-        await send_home_dashboard(target, context, mother=(res.data[0] if hasattr(res, 'data') and res.data else None), mothers=mothers, as_new_message=True)
+        await send_home_dashboard(target, context, mother=mother, mothers=mothers, as_new_message=True)
     except Exception as exc:
         logger.error(f"Registration save failed: {exc}", exc_info=True)
         await target.reply_text("⚠️ Could not save registration right now. Please try again later.")

@@ -7,8 +7,11 @@ import os
 import logging
 from typing import Dict, Any, List
 from abc import ABC, abstractmethod
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
+
+load_dotenv()
 
 # Import Gemini
 try:
@@ -50,26 +53,27 @@ class BaseAgent(ABC):
         """Return the system prompt for this agent"""
         pass
     
-    def build_context(self, mother_context: Dict[str, Any], reports_context: List[Dict[str, Any]]) -> str:
-        """Build comprehensive context string for AI prompt with all available records"""
+    def build_context(self, mother_id: Any) -> str:
+        try:
+            from backend.services.supabase_service import DatabaseService
+            from backend.utils.toon_helper import json_to_toon
+        except ImportError:
+            from services.supabase_service import DatabaseService
+            from utils.toon_helper import json_to_toon
+        data = DatabaseService.get_mother_holistic_data(mother_id)
+        profile = data.get('profile') or {}
         context_parts = [
             "===== COMPREHENSIVE MOTHER PROFILE =====",
-            f"Name: {mother_context.get('name', 'N/A')}",
-            f"Age: {mother_context.get('age', 'N/A')} years",
-            f"Gravida: {mother_context.get('gravida', 'N/A')}",
-            f"Parity: {mother_context.get('parity', 'N/A')}",
-            f"BMI: {mother_context.get('bmi', 'N/A')}",
-            f"Location: {mother_context.get('location', 'N/A')}",
+            f"Name: {profile.get('name', 'N/A')}",
+            f"Age: {profile.get('age', 'N/A')} years",
+            f"Gravida: {profile.get('gravida', 'N/A')}",
+            f"Parity: {profile.get('parity', 'N/A')}",
+            f"BMI: {profile.get('bmi', 'N/A')}",
+            f"Location: {profile.get('location', 'N/A')}",
         ]
         
-        # Add height and weight if available
-        if mother_context.get('height_cm'):
-            context_parts.append(f"Height: {mother_context.get('height_cm')} cm")
-        if mother_context.get('weight_kg'):
-            context_parts.append(f"Current Weight: {mother_context.get('weight_kg')} kg")
-        
         # Add due date if available
-        due_date = mother_context.get('due_date')
+        due_date = profile.get('due_date')
         if due_date:
             try:
                 from datetime import datetime
@@ -98,8 +102,8 @@ class BaseAgent(ABC):
         context_parts.append("")
         
         # Add appointments if available
-        next_appt = mother_context.get('next_appointment')
-        appointments = mother_context.get('appointments', [])
+        next_appt = None
+        appointments = []
         
         if next_appt:
             appt_date = next_appt.get('appointment_date', '')
@@ -142,7 +146,7 @@ class BaseAgent(ABC):
             context_parts.append("")
         
         # Add health timeline/vitals if available
-        timeline = mother_context.get('timeline', [])
+        timeline = []
         if timeline:
             context_parts.append("===== RECENT HEALTH EVENTS & VITALS =====")
             recent_vitals = {}
@@ -166,130 +170,10 @@ class BaseAgent(ABC):
                     context_parts.append(f"{key.replace('_', ' ').title()}: {value}")
             context_parts.append("")
         
-        # Add medical reports with full details - combine all reports
-        context_parts.append("===== MEDICAL REPORTS & DOCUMENTS =====")
-        if reports_context:
-            # Combine metrics from all reports
-            all_metrics = {}
-            all_concerns = []
-            all_recommendations = []
-            all_summaries = []
         
-            for i, report in enumerate(reports_context[:10], start=1):  # Include up to 10 reports
-                filename = report.get('file_name') or report.get('filename', f'Report {i}')
-                summary = report.get('analysis_summary') or report.get('summary', '')
-                uploaded_at = report.get('uploaded_at') or report.get('created_at', '')
-                upload_date = uploaded_at[:10] if uploaded_at else 'N/A'
-                
-                context_parts.append(f"Report {i} ({upload_date}): {filename}")
-                if summary:
-                    context_parts.append(f"  Summary: {summary}")
-                    all_summaries.append(f"{upload_date}: {summary}")
-                
-                # Extract health_metrics (can be JSON string or dict)
-                health_metrics = report.get('health_metrics', {})
-                if health_metrics:
-                    if isinstance(health_metrics, str):
-                        try:
-                            import json
-                            health_metrics = json.loads(health_metrics)
-                        except:
-                            health_metrics = {}
-                    if isinstance(health_metrics, dict):
-                        # Merge metrics from all reports (latest values take precedence)
-                        for key, value in health_metrics.items():
-                            if value is not None and value != "":
-                                all_metrics[key] = value
-                        if health_metrics:
-                            context_parts.append(f"  Metrics: {health_metrics}")
-                
-                # Extract extracted_metrics (alternative column name)
-                extracted_metrics = report.get('extracted_metrics', {})
-                if extracted_metrics:
-                    if isinstance(extracted_metrics, str):
-                        try:
-                            import json
-                            extracted_metrics = json.loads(extracted_metrics)
-                        except:
-                            extracted_metrics = {}
-                    if isinstance(extracted_metrics, dict):
-                        for key, value in extracted_metrics.items():
-                            if value is not None and value != "":
-                                all_metrics[key] = value
-                
-                # Extract from analysis_result if available
-                analysis_result = report.get('analysis_result', {})
-                if analysis_result:
-                    if isinstance(analysis_result, str):
-                        try:
-                            import json
-                            analysis_result = json.loads(analysis_result)
-                        except:
-                            analysis_result = {}
-                    if isinstance(analysis_result, dict):
-                        # Extract extracted_data from analysis_result
-                        extracted_data = analysis_result.get('extracted_data', {})
-                        if extracted_data and isinstance(extracted_data, dict):
-                            for key, value in extracted_data.items():
-                                if value is not None and value != "":
-                                    all_metrics[key] = value
-                
-                # Extract concerns
-                concerns = report.get('concerns', [])
-                if concerns:
-                    if isinstance(concerns, str):
-                        try:
-                            import json
-                            concerns = json.loads(concerns)
-                        except:
-                            concerns = []
-                    if isinstance(concerns, list):
-                        all_concerns.extend([c for c in concerns if c])
-                    elif concerns:
-                        all_concerns.append(str(concerns))
-                    if concerns:
-                        context_parts.append(f"  Concerns: {concerns if isinstance(concerns, list) else [concerns]}")
-                
-                # Extract recommendations
-                recommendations = report.get('recommendations', [])
-                if recommendations:
-                    if isinstance(recommendations, str):
-                        try:
-                            import json
-                            recommendations = json.loads(recommendations)
-                        except:
-                            recommendations = []
-                    if isinstance(recommendations, list):
-                        all_recommendations.extend([r for r in recommendations if r])
-                    elif recommendations:
-                        all_recommendations.append(str(recommendations))
-                
-                context_parts.append("")
-            
-            # Add combined summary of all reports
-            if all_metrics:
-                context_parts.append("===== COMBINED METRICS FROM ALL REPORTS =====")
-                for key, value in all_metrics.items():
-                    context_parts.append(f"{key.replace('_', ' ').title()}: {value}")
-                context_parts.append("")
-            
-            if all_concerns:
-                context_parts.append("===== COMBINED CONCERNS FROM ALL REPORTS =====")
-                for concern in set(all_concerns):  # Remove duplicates
-                    context_parts.append(f"⚠️ {concern}")
-                context_parts.append("")
-            
-            if all_recommendations:
-                context_parts.append("===== COMBINED RECOMMENDATIONS FROM ALL REPORTS =====")
-                for rec in set(all_recommendations):  # Remove duplicates
-                    context_parts.append(f"💡 {rec}")
-                context_parts.append("")
-        else:
-            context_parts.append("No medical reports available yet.")
-            context_parts.append("")
         
         # Add context memories (TOON summaries, concerns, facts)
-        memories = mother_context.get('memories', [])
+        memories = []
         if memories:
             context_parts.append("===== KEY HEALTH MEMORIES & CONCERNS =====")
             for mem in memories[:10]:  # Last 10 memories
@@ -306,12 +190,47 @@ class BaseAgent(ABC):
             context_parts.append("")
         
         # Add any additional health metrics from context
-        if mother_context.get('recent_bp'):
-            context_parts.append(f"Recent Blood Pressure: {mother_context.get('recent_bp')}")
-        if mother_context.get('recent_hb'):
-            context_parts.append(f"Recent Hemoglobin: {mother_context.get('recent_hb')}")
-        if mother_context.get('recent_sugar'):
-            context_parts.append(f"Recent Blood Sugar: {mother_context.get('recent_sugar')}")
+        hist = data.get('medical_history') or {}
+        toon = json_to_toon(hist)
+        if toon:
+            context_parts.append("===== TOON MEDICAL HISTORY =====")
+            context_parts.append(toon)
+            context_parts.append("")
+        risks = data.get('risk_assessments') or []
+        metrics = data.get('recent_metrics') or []
+        if risks or metrics:
+            context_parts.append("===== RECENT VITALS =====")
+            for r in risks[:3]:
+                bp = None
+                if r.get('systolic_bp') and r.get('diastolic_bp'):
+                    bp = f"{r.get('systolic_bp')}/{r.get('diastolic_bp')}"
+                if bp:
+                    context_parts.append(f"Blood Pressure: {bp}")
+                if r.get('hemoglobin') is not None:
+                    context_parts.append(f"Hemoglobin: {r.get('hemoglobin')}")
+                if r.get('blood_glucose') is not None:
+                    context_parts.append(f"Blood Glucose: {r.get('blood_glucose')}")
+                if r.get('heart_rate') is not None:
+                    context_parts.append(f"Heart Rate: {r.get('heart_rate')}")
+            for m in metrics[:3]:
+                if m.get('blood_pressure_systolic') and m.get('blood_pressure_diastolic'):
+                    context_parts.append(f"Blood Pressure: {m.get('blood_pressure_systolic')}/{m.get('blood_pressure_diastolic')}")
+                if m.get('hemoglobin') is not None:
+                    context_parts.append(f"Hemoglobin: {m.get('hemoglobin')}")
+                if m.get('blood_sugar') is not None:
+                    context_parts.append(f"Blood Sugar: {m.get('blood_sugar')}")
+                if m.get('weight_kg') is not None:
+                    context_parts.append(f"Weight: {m.get('weight_kg')}")
+            context_parts.append("")
+        asha = data.get('asha_worker')
+        if asha:
+            context_parts.append("===== ASSIGNED ASHA WORKER =====")
+            context_parts.append(f"Name: {asha.get('name')}")
+            if asha.get('phone'):
+                context_parts.append(f"Phone: {asha.get('phone')}")
+            if asha.get('assigned_area'):
+                context_parts.append(f"Area: {asha.get('assigned_area')}")
+            context_parts.append("")
         
         return "\n".join(context_parts)
     
@@ -319,7 +238,8 @@ class BaseAgent(ABC):
         self,
         query: str,
         mother_context: Dict[str, Any],
-        reports_context: List[Dict[str, Any]]
+        reports_context: List[Dict[str, Any]],
+        language: str = 'en'
     ) -> str:
         """Process a query and return response"""
         if not self.model:
@@ -331,25 +251,17 @@ class BaseAgent(ABC):
         try:
             # Build full prompt
             system_prompt = self.get_system_prompt()
-            context_info = self.build_context(mother_context, reports_context)
-            preferred_language = mother_context.get('preferred_language', 'en')
+            context_info = self.build_context(mother_context.get('id'))
+            preferred_language = language or mother_context.get('preferred_language', 'en')
             
             full_prompt = f"""
+CRITICAL: Strictly follow WHO and NHM India guidelines. If High Risk, recommend hospital. Reply ONLY in {preferred_language}.
+
 {system_prompt}
 
 {context_info}
 
-Language: {preferred_language}
-
 User Question: {query}
-
-Instructions:
-- Provide a helpful, empathetic response
-- Keep response concise (2-4 paragraphs)
-- If urgent or concerning, strongly advise consulting healthcare provider
-- Be specific and actionable
-- Use simple, clear language
-- Respond in the specified language above
 
 Response:
 """

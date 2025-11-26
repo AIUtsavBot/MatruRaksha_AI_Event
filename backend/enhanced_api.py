@@ -20,7 +20,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from context_builder import build_holistic_context
+try:
+    from backend.context_builder import build_holistic_context
+except ImportError:
+    from context_builder import build_holistic_context
 
 # Load environment
 load_dotenv()
@@ -96,6 +99,8 @@ class QueryRequest(BaseModel):
     query: str
     use_context: bool = True
     language: Optional[str] = "en"
+
+#
 
 
 # ==================== HELPER FUNCTIONS ====================
@@ -351,7 +356,7 @@ async def get_conversation_history(mother_id: str, limit: int = 50):
     except Exception as e:
         logger.error(f"Error getting conversation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
+ 
 
 # ==================== SUMMARY ENDPOINT ====================
 

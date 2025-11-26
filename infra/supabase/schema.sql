@@ -101,3 +101,82 @@ create index if not exists idx_metrics_mother_id on public.health_metrics(mother
 create index if not exists idx_context_memory_mother_id on public.context_memory(mother_id);
 create index if not exists idx_conversations_mother_id on public.conversations(mother_id);
 create index if not exists idx_agents_mother_id on public.agents(mother_id);
+
+-- ===== PHASE 1: Schema Upgrades =====
+alter table public.mothers
+  add column if not exists medical_history jsonb default '{"conditions": [], "medications": [], "trend_analysis": "No prior history."}'::jsonb;
+
+create table if not exists public.asha_workers (
+  id bigserial primary key,
+  name text not null,
+  phone text,
+  assigned_area text,
+  is_active boolean default true,
+  created_at timestamptz default now()
+);
+
+insert into public.asha_workers (name, phone, assigned_area, is_active)
+  values
+  ('Seema Patil', '9000000001', 'Pune', true),
+  ('Rakesh Kumar', '9000000002', 'Mumbai', true),
+  ('Anita Joshi', '9000000003', 'Nashik', true)
+on conflict do nothing;
+
+alter table public.mothers
+  add column if not exists asha_worker_id bigint references public.asha_workers(id);
+
+create table if not exists public.case_discussions (
+  id bigserial primary key,
+  mother_id bigint references public.mothers(id) on delete cascade,
+  sender_role text not null,
+  sender_name text,
+  message text not null,
+  created_at timestamptz default now()
+);
+
+alter publication supabase_realtime add table public.case_discussions;
+alter publication supabase_realtime add table public.risk_assessments;
+alter publication supabase_realtime add table public.mothers;
+
+-- ===== Doctor Management (Proximity Assignment) =====
+create table if not exists public.doctors (
+  id bigserial primary key,
+  name text not null,
+  phone text,
+  assigned_area text,
+  is_active boolean default true,
+  created_at timestamptz default now()
+);
+
+insert into public.doctors (name, phone, assigned_area, is_active)
+  values
+  ('Dr. Meera Shah', '9100000001', 'Pune', true),
+  ('Dr. Arjun Rao', '9100000002', 'Mumbai', true),
+  ('Dr. Kavita Desai', '9100000003', 'Nashik', true)
+on conflict do nothing;
+
+alter table public.mothers
+  add column if not exists doctor_id bigint references public.doctors(id);
+
+-- Ensure appointments have a constrained status and realtime replication
+alter table public.appointments
+  alter column status drop default;
+
+-- Create status enum-like constraint if not already present
+alter table public.appointments
+  add constraint if not exists chk_appointments_status
+  check (status in ('scheduled','confirmed','completed','missed','cancelled'));
+
+-- Add facility column if missing
+do $ begin
+  alter table public.appointments add column facility text;
+exception when duplicate_column then null;
+end $;
+
+-- Add to realtime publication as well
+alter publication supabase_realtime add table public.appointments;
+
+-- Case discussions sender role constraint
+alter table public.case_discussions
+  add constraint if not exists chk_case_discussions_sender_role
+  check (sender_role in ('MOTHER','ASHA','DOCTOR','SYSTEM'));

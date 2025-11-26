@@ -76,7 +76,10 @@ except ImportError as e:
 
 # ==================== AI AGENTS IMPORT ====================
 try:
-    from agents.orchestrator import orchestrator
+    try:
+        from backend.agents.orchestrator import orchestrator
+    except ImportError:
+        from agents.orchestrator import orchestrator
     AGENTS_AVAILABLE = True
     logger.info("✅ AI Agents loaded successfully")
 except ImportError as e:
@@ -150,13 +153,22 @@ def run_telegram_bot():
         
         # Import telegram bot
         try:
-            from telegram_bot import (
-                MatruRakshaBot,
-                handle_switch_callback,
-                handle_home_action,
-                handle_document_upload,
-                handle_text_message,
-            )
+            try:
+                from backend.telegram_bot import (
+                    MatruRakshaBot,
+                    handle_switch_callback,
+                    handle_home_action,
+                    handle_document_upload,
+                    handle_text_message,
+                )
+            except ImportError:
+                from telegram_bot import (
+                    MatruRakshaBot,
+                    handle_switch_callback,
+                    handle_home_action,
+                    handle_document_upload,
+                    handle_text_message,
+                )
             from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ConversationHandler, filters
             from telegram import Update
         except ImportError as e:
@@ -170,11 +182,18 @@ def run_telegram_bot():
         bot = MatruRakshaBot()
         
         # Setup handlers manually here (if bot doesn't have setup_handlers method)
-        from telegram_bot import (
-            AWAITING_NAME, AWAITING_AGE, AWAITING_PHONE, AWAITING_DUE_DATE,
-            AWAITING_LOCATION, AWAITING_GRAVIDA, AWAITING_PARITY, AWAITING_BMI,
-            AWAITING_LANGUAGE, CONFIRM_REGISTRATION
-        )
+        try:
+            from backend.telegram_bot import (
+                AWAITING_NAME, AWAITING_AGE, AWAITING_PHONE, AWAITING_DUE_DATE,
+                AWAITING_LOCATION, AWAITING_GRAVIDA, AWAITING_PARITY, AWAITING_BMI,
+                AWAITING_LANGUAGE, CONFIRM_REGISTRATION
+            )
+        except ImportError:
+            from telegram_bot import (
+                AWAITING_NAME, AWAITING_AGE, AWAITING_PHONE, AWAITING_DUE_DATE,
+                AWAITING_LOCATION, AWAITING_GRAVIDA, AWAITING_PARITY, AWAITING_BMI,
+                AWAITING_LANGUAGE, CONFIRM_REGISTRATION
+            )
         
         # Registration conversation handler
         registration_handler = ConversationHandler(
@@ -200,12 +219,25 @@ def run_telegram_bot():
         )
         
         # Add handlers
+        # Keep /start but also allow simple greetings like "hi" to open the dashboard
         application.add_handler(CommandHandler("start", bot.start))
+
+        # "Hi" (and variants) should behave like /start
+        greeting_filter = (
+            filters.TEXT & ~filters.COMMAND &
+            (
+                filters.Regex(r"^(?i)hi$") |
+                filters.Regex(r"^(?i)hello$") |
+                filters.Regex(r"^(?i)hey$")
+            )
+        )
+        application.add_handler(MessageHandler(greeting_filter, bot.start))
+
         application.add_handler(registration_handler)
         application.add_handler(CallbackQueryHandler(handle_switch_callback, pattern=r"^switch_mother_"))
         application.add_handler(CallbackQueryHandler(handle_home_action, pattern=r"^action_"))
         application.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, handle_document_upload))
-        # Add text message handler for queries (but not during registration)
+        # Add text message handler for other free-form queries (but not during registration)
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
         
         # Initialize the application
@@ -315,9 +347,13 @@ async def lifespan(app: FastAPI):
 
 # ==================== CREATE FASTAPI APP ====================
 # Mount enhanced API router
-from enhanced_api import router as enhanced_router
-app = FastAPI(title="MatruRaksha AI Backend", lifespan=lifespan)
-app.include_router(enhanced_router)
+try:
+    from enhanced_api import router as enhanced_router
+    app = FastAPI(title="MatruRaksha AI Backend", lifespan=lifespan)
+    app.include_router(enhanced_router)
+except ImportError:
+    logger.warning("⚠️  Enhanced API router not available")
+    app = FastAPI(title="MatruRaksha AI Backend", lifespan=lifespan)
 # ==================== CORS SETUP ====================
 app.add_middleware(
     CORSMiddleware,

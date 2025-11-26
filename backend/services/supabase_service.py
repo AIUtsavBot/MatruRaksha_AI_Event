@@ -75,6 +75,54 @@ class DatabaseService:
     """Service for database operations"""
     
     @staticmethod
+    def assign_doctor_to_mother(mother_id: Any, location_string: str) -> Optional[Dict[str, Any]]:
+        try:
+            docs_resp = supabase.table('doctors').select('*').eq('is_active', True).execute()
+            docs = docs_resp.data or []
+            loc = (location_string or '').strip().lower()
+            chosen = None
+            for d in docs:
+                area = (d.get('assigned_area') or '').strip().lower()
+                if area and area == loc:
+                    chosen = d
+                    break
+            if not chosen:
+                for d in docs:
+                    area = (d.get('assigned_area') or '').strip().lower()
+                    if area and (area in loc or loc in area):
+                        chosen = d
+                        break
+            if chosen:
+                supabase.table('mothers').update({'doctor_id': chosen.get('id')}).eq('id', mother_id).execute()
+            return chosen
+        except Exception:
+            return None
+
+    @staticmethod
+    def update_appointment_status(appointment_id: Any, status: str) -> bool:
+        try:
+            supabase.table('appointments').update({'status': status}).eq('id', appointment_id).execute()
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def schedule_appointment(mother_id: Any, appointment_date: str, appointment_type: str = 'ANC', facility: Optional[str] = None, notes: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        try:
+            payload = {
+                'mother_id': mother_id,
+                'appointment_date': appointment_date,
+                'appointment_type': appointment_type,
+                'status': 'scheduled',
+                'notes': notes,
+                'facility': facility
+            }
+            resp = supabase.table('appointments').insert(payload).execute()
+            return resp.data[0] if resp.data else None
+        except Exception:
+            return None
+
+    @staticmethod
     async def save_chat_history(
         mother_id: str,
         telegram_chat_id: str,
@@ -194,6 +242,83 @@ class DatabaseService:
             
         except Exception as e:
             logger.error(f"❌ Error fetching medical reports: {e}")
+            return []
+
+    @staticmethod
+    def get_mother_holistic_data(mother_id: Any) -> Dict[str, Any]:
+        try:
+            profile_resp = supabase.table('mothers').select('*').eq('id', mother_id).execute()
+            profile = profile_resp.data[0] if profile_resp.data else {}
+            risks_resp = supabase.table('risk_assessments').select('*').eq('mother_id', mother_id).order('created_at', desc=True).limit(3).execute()
+            risks = risks_resp.data or []
+            metrics_resp = supabase.table('health_metrics').select('*').eq('mother_id', mother_id).order('measured_at', desc=True).limit(5).execute()
+            metrics = metrics_resp.data or []
+            asha = None
+            aw_id = profile.get('asha_worker_id')
+            if aw_id:
+                aw_resp = supabase.table('asha_workers').select('*').eq('id', aw_id).execute()
+                asha = aw_resp.data[0] if aw_resp.data else None
+            doctor = None
+            doc_id = profile.get('doctor_id')
+            if doc_id:
+                doc_resp = supabase.table('doctors').select('*').eq('id', doc_id).execute()
+                doctor = doc_resp.data[0] if doc_resp.data else None
+            return {
+                'profile': profile,
+                'medical_history': profile.get('medical_history') or {},
+                'risk_assessments': risks,
+                'recent_metrics': metrics,
+                'asha_worker': asha,
+                'doctor': doctor
+            }
+        except Exception:
+            return {}
+
+    @staticmethod
+    def assign_asha_worker_to_mother(mother_id: Any, location_string: str) -> Optional[Dict[str, Any]]:
+        try:
+            workers_resp = supabase.table('asha_workers').select('*').eq('is_active', True).execute()
+            workers = workers_resp.data or []
+            loc = (location_string or '').strip().lower()
+            chosen = None
+            for w in workers:
+                area = (w.get('assigned_area') or '').strip().lower()
+                if area and area == loc:
+                    chosen = w
+                    break
+            if not chosen:
+                for w in workers:
+                    area = (w.get('assigned_area') or '').strip().lower()
+                    if area and (area in loc or loc in area):
+                        chosen = w
+                        break
+            if chosen:
+                supabase.table('mothers').update({'asha_worker_id': chosen.get('id')}).eq('id', mother_id).execute()
+            return chosen
+        except Exception:
+            return None
+
+    @staticmethod
+    def send_case_message(mother_id: Any, sender_role: str, sender_name: str, message: str) -> Optional[Dict[str, Any]]:
+        try:
+            payload = {
+                'mother_id': mother_id,
+                'sender_role': sender_role,
+                'sender_name': sender_name,
+                'message': message,
+                'created_at': datetime.now().isoformat()
+            }
+            resp = supabase.table('case_discussions').insert(payload).execute()
+            return resp.data[0] if resp.data else None
+        except Exception:
+            return None
+
+    @staticmethod
+    def get_case_messages(mother_id: Any, limit: int = 50) -> List[Dict[str, Any]]:
+        try:
+            resp = supabase.table('case_discussions').select('*').eq('mother_id', mother_id).order('created_at', desc=True).limit(limit).execute()
+            return resp.data or []
+        except Exception:
             return []
     
     @staticmethod

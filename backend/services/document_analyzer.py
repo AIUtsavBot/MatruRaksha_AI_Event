@@ -266,5 +266,43 @@ Return ONLY valid JSON."""
             }
 
 
+    async def analyze_and_update_history(self, file: Dict[str, Any], mother_id: Any) -> Dict[str, Any]:
+        if not self.model:
+            return {"success": False, "error": "AI not available"}
+        try:
+            fb = file.get('bytes')
+            fn = file.get('filename') or 'document'
+            analysis = await self.analyze_document(fb, fn, str(mother_id))
+            from services.supabase_service import supabase
+            from utils.toon_helper import json_to_toon
+            prof = supabase.table('mothers').select('medical_history').eq('id', mother_id).execute()
+            old_hist = (prof.data[0].get('medical_history') if prof.data else {}) or {}
+            old_toon = json_to_toon(old_hist)
+            prompt = (
+                "Compare the OLD medical history with the NEW report analysis. "
+                "Return an updated JSON with keys: conditions, medications, trend_analysis. "
+                "Focus on changes and trends."
+            )
+            payload = [prompt, f"OLD:\n{old_toon}", f"NEW:\n{analysis.get('analysis_summary','')}"]
+            resp = self.model.generate_content(payload)
+            txt = resp.text.strip()
+            if "```json" in txt:
+                txt = txt.split("```json")[1].split("```")[0].strip()
+            elif "```" in txt:
+                txt = txt.split("```")[1].split("```")[0].strip()
+            import json as _json
+            try:
+                new_hist = _json.loads(txt)
+            except Exception:
+                new_hist = {
+                    "conditions": old_hist.get("conditions", []),
+                    "medications": old_hist.get("medications", []),
+                    "trend_analysis": analysis.get("analysis_summary", "")
+                }
+            supabase.table('mothers').update({"medical_history": new_hist}).eq('id', mother_id).execute()
+            return {"success": True, "medical_history": new_hist, "analysis": analysis}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
 # Global instance
 document_analyzer = DocumentAnalyzer()
