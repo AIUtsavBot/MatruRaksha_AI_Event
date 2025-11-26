@@ -36,6 +36,7 @@ bot_running = False
 # ==================== ENVIRONMENT VALIDATION ====================
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -53,7 +54,8 @@ if not GEMINI_API_KEY:
     GEMINI_API_KEY = None
 
 try:
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    effective_key = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_KEY
+    supabase: Client = create_client(SUPABASE_URL, effective_key)
     logger.info("✅ Supabase client initialized")
 except Exception as e:
     logger.error(f"❌ Supabase initialization error: {e}")
@@ -76,10 +78,7 @@ except ImportError as e:
 
 # ==================== AI AGENTS IMPORT ====================
 try:
-    try:
-        from backend.agents.orchestrator import orchestrator
-    except ImportError:
-        from agents.orchestrator import orchestrator
+    from agents.orchestrator import orchestrator
     AGENTS_AVAILABLE = True
     logger.info("✅ AI Agents loaded successfully")
 except ImportError as e:
@@ -153,22 +152,13 @@ def run_telegram_bot():
         
         # Import telegram bot
         try:
-            try:
-                from backend.telegram_bot import (
-                    MatruRakshaBot,
-                    handle_switch_callback,
-                    handle_home_action,
-                    handle_document_upload,
-                    handle_text_message,
-                )
-            except ImportError:
-                from telegram_bot import (
-                    MatruRakshaBot,
-                    handle_switch_callback,
-                    handle_home_action,
-                    handle_document_upload,
-                    handle_text_message,
-                )
+            from telegram_bot import (
+                MatruRakshaBot,
+                handle_switch_callback,
+                handle_home_action,
+                handle_document_upload,
+                handle_text_message,
+            )
             from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ConversationHandler, filters
             from telegram import Update
         except ImportError as e:
@@ -182,18 +172,11 @@ def run_telegram_bot():
         bot = MatruRakshaBot()
         
         # Setup handlers manually here (if bot doesn't have setup_handlers method)
-        try:
-            from backend.telegram_bot import (
-                AWAITING_NAME, AWAITING_AGE, AWAITING_PHONE, AWAITING_DUE_DATE,
-                AWAITING_LOCATION, AWAITING_GRAVIDA, AWAITING_PARITY, AWAITING_BMI,
-                AWAITING_LANGUAGE, CONFIRM_REGISTRATION
-            )
-        except ImportError:
-            from telegram_bot import (
-                AWAITING_NAME, AWAITING_AGE, AWAITING_PHONE, AWAITING_DUE_DATE,
-                AWAITING_LOCATION, AWAITING_GRAVIDA, AWAITING_PARITY, AWAITING_BMI,
-                AWAITING_LANGUAGE, CONFIRM_REGISTRATION
-            )
+        from telegram_bot import (
+            AWAITING_NAME, AWAITING_AGE, AWAITING_PHONE, AWAITING_DUE_DATE,
+            AWAITING_LOCATION, AWAITING_GRAVIDA, AWAITING_PARITY, AWAITING_BMI,
+            AWAITING_LANGUAGE, CONFIRM_REGISTRATION
+        )
         
         # Registration conversation handler
         registration_handler = ConversationHandler(
@@ -211,7 +194,7 @@ def run_telegram_bot():
                 AWAITING_BMI: [MessageHandler(filters.TEXT & ~filters.COMMAND, bot.receive_bmi)],
                 AWAITING_LANGUAGE: [
                     CallbackQueryHandler(bot.receive_language, pattern="^lang_"),
-                    MessageHandler(filters.TEXT & ~filters.COMMAND, bot.receive_language)
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, bot.receive_language),
                 ],
                 CONFIRM_REGISTRATION: [CallbackQueryHandler(bot.confirm_registration, pattern="^confirm_")]
             },
@@ -222,25 +205,12 @@ def run_telegram_bot():
         )
         
         # Add handlers
-        # Keep /start but also allow simple greetings like "hi" to open the dashboard
         application.add_handler(CommandHandler("start", bot.start))
-
-        # "Hi" (and variants) should behave like /start
-        greeting_filter = (
-            filters.TEXT & ~filters.COMMAND &
-            (
-                filters.Regex(r"(?i)^hi$") |
-                filters.Regex(r"(?i)^hello$") |
-                filters.Regex(r"(?i)^hey$")
-            )
-        )
-        application.add_handler(MessageHandler(greeting_filter, bot.start))
-
         application.add_handler(registration_handler)
         application.add_handler(CallbackQueryHandler(handle_switch_callback, pattern=r"^switch_mother_"))
         application.add_handler(CallbackQueryHandler(handle_home_action, pattern=r"^action_"))
         application.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, handle_document_upload))
-        # Add text message handler for other free-form queries (but not during registration)
+        # Add text message handler for queries (but not during registration)
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
         
         # Initialize the application
@@ -350,13 +320,9 @@ async def lifespan(app: FastAPI):
 
 # ==================== CREATE FASTAPI APP ====================
 # Mount enhanced API router
-try:
-    from enhanced_api import router as enhanced_router
-    app = FastAPI(title="MatruRaksha AI Backend", lifespan=lifespan)
-    app.include_router(enhanced_router)
-except ImportError:
-    logger.warning("⚠️  Enhanced API router not available")
-    app = FastAPI(title="MatruRaksha AI Backend", lifespan=lifespan)
+from enhanced_api import router as enhanced_router
+app = FastAPI(title="MatruRaksha AI Backend", lifespan=lifespan)
+app.include_router(enhanced_router)
 # ==================== CORS SETUP ====================
 app.add_middleware(
     CORSMiddleware,
