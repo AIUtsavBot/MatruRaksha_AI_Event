@@ -820,4 +820,35 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = (update.message.text or "").strip()
     if text.startswith("/"):
         return
-    await update.message.reply_text("I’m here to help. Use the menu buttons or type /start.")
+    try:
+        chat_id = str(getattr(getattr(update, 'message', None), 'chat', None).id)
+    except Exception:
+        chat_id = None
+    try:
+        mothers = await get_mothers_by_telegram_id(chat_id) if callable(get_mothers_by_telegram_id) else []
+        mother = mothers[0] if mothers else None
+    except Exception:
+        mothers = []
+        mother = None
+    try:
+        reports = await get_recent_reports_for_mother(mother.get('id')) if (mother and callable(get_recent_reports_for_mother)) else []
+    except Exception:
+        reports = []
+    mother_context = mother or {"preferred_language": "en"}
+    try:
+        await save_chat_history(mother_context.get('id') if isinstance(mother_context, dict) else None, "user_query", text, telegram_chat_id=chat_id)
+    except Exception:
+        pass
+    try:
+        reply = await route_message(text, mother_context, reports)
+    except Exception as e:
+        logger.error(f"Routing error: {e}")
+        reply = "I’m having trouble processing that right now. Please try again."
+    try:
+        await update.message.reply_text(reply)
+        try:
+            await save_chat_history(mother_context.get('id') if isinstance(mother_context, dict) else None, "agent_response", reply, telegram_chat_id=chat_id)
+        except Exception:
+            pass
+    except Exception:
+        await update.message.reply_text("I’m here to help. Use the menu buttons or type /start.")

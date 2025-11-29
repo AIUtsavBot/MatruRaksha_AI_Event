@@ -1,5 +1,6 @@
 // FILE: frontend/src/services/api.js
 import axios from 'axios'
+import { supabase } from './auth'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -9,6 +10,24 @@ const api = axios.create({
     'Content-Type': 'application/json'
   }
 })
+
+// Attach Supabase access token for protected backend routes
+api.interceptors.request.use(
+  async (config) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (token) {
+        config.headers = config.headers || {}
+        config.headers['Authorization'] = `Bearer ${token}`
+      }
+    } catch (err) {
+      // No session available; proceed without token
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
 
 // Error handling interceptor
 api.interceptors.response.use(

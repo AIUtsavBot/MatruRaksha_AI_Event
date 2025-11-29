@@ -6,7 +6,7 @@ API endpoints for user authentication and authorization
 import logging
 from typing import Optional
 from fastapi import APIRouter, HTTPException, status, Depends, UploadFile, File, Form
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 # Import auth service and middleware
 try:

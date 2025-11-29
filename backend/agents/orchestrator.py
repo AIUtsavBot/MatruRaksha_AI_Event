@@ -102,12 +102,12 @@ class OrchestratorAgent:
                 from backend.agents.nutrition_agent import NutritionAgent
                 from backend.agents.risk_agent import RiskAgent
             except ImportError:
-                from asha_agent import AshaAgent
-                from care_agent import CareAgent
-                from emergency_agent import EmergencyAgent
-                from medication_agent import MedicationAgent
-                from nutrition_agent import NutritionAgent
-                from risk_agent import RiskAgent
+                from agents.asha_agent import AshaAgent
+                from agents.care_agent import CareAgent
+                from agents.emergency_agent import EmergencyAgent
+                from agents.medication_agent import MedicationAgent
+                from agents.nutrition_agent import NutritionAgent
+                from agents.risk_agent import RiskAgent
             
             self.agents = {
                 AgentType.ASHA: AshaAgent(),
@@ -257,7 +257,12 @@ Respond with ONLY the category name (one word).
             )
         
         try:
-            model = genai.GenerativeModel('gemini-1.5-flash-latest')
+            model_name = (
+                os.getenv('GEMINI_SFT_MODEL')
+                or os.getenv('GEMINI_MODEL_NAME')
+                or 'gemini-2.5-flash'
+            )
+            model = genai.GenerativeModel(model_name)
             
             # Build context
             context_info = f"""

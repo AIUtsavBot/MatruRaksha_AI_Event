@@ -1,9 +1,16 @@
 """
 MatruRaksha AI - Care and Nutrition Agents
 """
-from typing import Dict, Any, List, Optional
+from typing import Any, List
+import logging
 
 from agents.base_agent import BaseAgent
+try:
+    from backend.services.supabase_service import DatabaseService
+except ImportError:
+    from services.supabase_service import DatabaseService
+
+logger = logging.getLogger(__name__)
 
 
 class AshaAgent(BaseAgent):
@@ -15,45 +22,40 @@ class AshaAgent(BaseAgent):
             agent_role="Community Health Services Coordinator"
         )
     
-    def build_context(self, mother_context: Dict, reports_context: List) -> str:
+    def build_context(self, mother_id: Any) -> str:
         """Build context with appointment data from database"""
-        # Get database service
         try:
-            from services.database_service import DatabaseService
-            
-            # Get upcoming appointments
-            upcoming = DatabaseService.get_upcoming_appointments(mother_context.get('id'))
-            next_appt = DatabaseService.get_next_appointment(mother_context.get('id'))
-            anc_status = DatabaseService.get_anc_schedule_status(mother_context.get('id'))
-            
-            context = super().build_context(mother_context, reports_context)
-            
-            # Add appointment information
-            context += f"\n\nAPPOINTMENT INFORMATION:"
+            upcoming = DatabaseService.get_upcoming_appointments(mother_id)
+            next_appt = DatabaseService.get_next_appointment(mother_id)
+            anc_status = DatabaseService.get_anc_schedule_status(mother_id)
+
+            context = super().build_context(mother_id)
+
+            context += "\n\nAPPOINTMENT INFORMATION:"
             context += f"\nPregnancy Week: {anc_status.get('pregnancy_week', 'Unknown')}"
             context += f"\nCompleted ANC Visits: {anc_status.get('completed_visits', 0)}"
             context += f"\nRecommended Visits: {anc_status.get('recommended_visits', 4)}"
-            
+
             if next_appt:
-                appt_date = next_appt.get('appointment_date', '')[:10]
-                context += f"\n\nNEXT APPOINTMENT:"
+                appt_date = (next_appt.get('appointment_date', '') or '')[:10]
+                context += "\n\nNEXT APPOINTMENT:"
                 context += f"\n- Type: {next_appt.get('appointment_type', 'Checkup')}"
                 context += f"\n- Date: {appt_date}"
                 context += f"\n- Location: {next_appt.get('appointment_location', 'Not specified')}"
             else:
-                context += f"\n\nNEXT APPOINTMENT: None scheduled"
-            
+                context += "\n\nNEXT APPOINTMENT: None scheduled"
+
             if upcoming:
                 context += f"\n\nUPCOMING APPOINTMENTS ({len(upcoming)}):"
                 for i, appt in enumerate(upcoming[:3], 1):
-                    appt_date = appt.get('appointment_date', '')[:10]
+                    appt_date = (appt.get('appointment_date', '') or '')[:10]
                     context += f"\n{i}. {appt.get('appointment_type')} on {appt_date}"
-            
+
             return context
-            
+
         except Exception as e:
             logger.error(f"Error building ASHA context: {e}")
-            return super().build_context(mother_context, reports_context)
+            return super().build_context(mother_id)
     
     def get_system_prompt(self) -> str:
         return """

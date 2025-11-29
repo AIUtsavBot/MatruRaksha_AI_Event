@@ -7,7 +7,7 @@ import time
 import asyncio
 import base64
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException, status, Request, BackgroundTasks
+from fastapi import FastAPI, HTTPException, status, Request, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
@@ -387,13 +387,49 @@ if auth_router:
         pass
 
 # ==================== CORS SETUP ====================
+# Configure CORS to explicitly allow the frontend origin
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").strip()
+ALLOWED_ORIGINS = [FRONTEND_URL, "http://127.0.0.1:5173"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ==================== FALLBACK AUTH ROUTES (ensure availability) ====================
+try:
+    from backend.services.auth_service import auth_service
+    from backend.middleware.auth import require_admin
+except ImportError:
+    from services.auth_service import auth_service
+    from middleware.auth import require_admin
+
+class RegisterDecisionBody(BaseModel):
+    approved: bool
+    note: Optional[str] = None
+
+@app.get("/auth/register-requests")
+async def fallback_list_register_requests(current_user: dict = Depends(require_admin)):
+    try:
+        requests = await auth_service.list_registration_requests(status_filter="PENDING")
+        return {"success": True, "requests": requests}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/auth/register-requests/{request_id}/decision")
+async def fallback_decide_register_request(request_id: int, body: RegisterDecisionBody, current_user: dict = Depends(require_admin)):
+    try:
+        if body.approved:
+            result = await auth_service.approve_registration_request(request_id, reviewer_id=current_user["id"], note=body.note)
+            return {"success": True, "message": "Request approved", "user": result}
+        else:
+            await auth_service.reject_registration_request(request_id, reviewer_id=current_user["id"], note=body.note)
+            return {"success": True, "message": "Request rejected"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 # ==================== HELPER FUNCTIONS ====================
 
