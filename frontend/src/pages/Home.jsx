@@ -1,5 +1,10 @@
 import React from 'react'
 import motherImg from '../assets/mother-child.jpeg'
+import doctorImg from '../assets/doctor.png'
+import doctoeImg2 from '../assets/doctor2.png'
+import dashboardImg from '../assets/dashboard.png'
+import dashboardImg2 from '../assets/dashboard2.png'
+import mermaidImg from '../assets/mermaid.png'
 import { HeartPulse, FileText, Users, AlertTriangle, Pill, MessageSquare, PlayCircle, Building2, ShieldCheck, Workflow, BrainCircuit, Github } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -103,9 +108,13 @@ export default function Home() {
         <SectionTitle title="The Solution – MatruRaksha-AI" />
         <div className="bg-white rounded-xl shadow-sm p-8 border border-gray-200">
           <p className="text-gray-800">A multi-agent AI platform that detects maternal risk early, analyzes medical documents instantly, and coordinates care across Telegram, WhatsApp, and web dashboards.</p>
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-            <div className="text-sm text-gray-700">Mother → Chatbot → Risk Score → Alerts → ASHA Dashboard → Escalation</div>
-            <img id="flow-diagram" src={motherImg} alt="Flow Diagram: Mother → Chatbot → Risk Score → Alerts → ASHA Dashboard → Escalation" className="w-full h-56 object-cover rounded-md" />
+          <div className="mt-6">
+            <img
+              id="flow-diagram"
+              src={mermaidImg}
+              alt="System flow diagram"
+              className="w-full max-w-4xl mx-auto rounded-md object-contain"
+            />
           </div>
         </div>
       </section>
@@ -125,9 +134,9 @@ export default function Home() {
       <section id="demo" className="max-w-7xl mx-auto px-6 py-12">
         <SectionTitle title="Demo / Screenshots" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <DemoCard id="demo-telegram" src={motherImg} caption="Telegram bot flow" />
-          <DemoCard id="demo-risk-dashboard" src={motherImg} caption="Risk dashboard" />
-          <DemoCard id="demo-report-summary" src={motherImg} caption="AI-generated report summary" />
+          <DemoCard id="demo-telegram" src={dashboardImg} caption="Telegram bot flow" />
+          <DemoCard id="demo-risk-dashboard" src={dashboardImg2} caption="Risk dashboard" />
+          <DemoCard id="demo-report-summary" src={doctoeImg2} caption="AI-generated report summary" />
         </div>
       </section>
 
@@ -184,11 +193,11 @@ export default function Home() {
             <a href="https://t.me/MatruRaksha_AI_Bot" className="inline-flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700">
               Start Chat on Telegram <span className="text-white/80">@MatruRaksha_AI_Bot</span>
             </a>
-            <select aria-label="Language" onChange={changeLang} defaultValue={i18n.language || 'en'} className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            {/* <select aria-label="Language" onChange={changeLang} defaultValue={i18n.language || 'en'} className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
               <option value="en">EN</option>
               <option value="hi">HI</option>
               <option value="mr">MR</option>
-            </select>
+            </select> */}
             <div className="text-xs text-gray-600">© 2025 MatruRaksha AI · React · FastAPI · Supabase · Gemini</div>
           </div>
         </div>
