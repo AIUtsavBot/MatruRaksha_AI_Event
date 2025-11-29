@@ -181,7 +181,15 @@ cp .env.example .env
 ```env
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+BACKEND_API_BASE_URL=http://localhost:8000
+
+FRONTEND_URL=http://localhost:5173
+
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL_NAME=gemini-2.5-flash
 ```
 
 ### **3. Database Setup**
@@ -213,6 +221,7 @@ VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 # Base URL for backend API used by the frontend (example: https://your-backend.example)
 VITE_API_URL=http://localhost:8000
+VITE_TELEGRAM_BOT_NAME=YourTelegramBotName
 ```
 
 Note: This project uses Vite (dev server on port 5173). If you run into the Vite Node version warning or the
@@ -239,6 +248,7 @@ python main.py
 Server runs at: `http://localhost:8000`
 - API Docs: `http://localhost:8000/docs`
 - Health Check: `http://localhost:8000/health`
+- Auth routes: `/auth/...`
 
 ### **Start Frontend**
 
@@ -248,6 +258,7 @@ npm run dev
 ```
 
 Dashboard runs at: `http://localhost:5173` (Vite dev server)
+Ensure `FRONTEND_URL` in backend `.env` matches this origin.
 
 ### **Start Scheduler (For Automated Tasks)**
 
@@ -306,20 +317,14 @@ The backend FastAPI app currently exposes the following endpoints by default (th
 
 - GET  /analytics/dashboard   — Basic dashboard analytics (counts and risk distribution)
 
+- GET  /auth/register-requests           — List pending registration requests (Admin)
+- POST /auth/register-requests/{id}/decision — Approve/Reject a request (Admin)
+
 Interactive docs are available at `http://localhost:8000/docs` when the backend is running.
 
 Notes on optional/extra endpoints
 
-- `backend/enhanced_api.py` contains an `APIRouter` with many enhanced routes (prefixed with `/api/v1`, e.g. `/api/v1/reports/analyze`, `/api/v1/memory/store`, `/api/v1/agent/query`, etc.). That router is implemented in the file but is not automatically mounted into the FastAPI app in `main.py`.
-
-  To enable the enhanced API routes, edit `backend/main.py` and add the router mounting (example):
-
-  ```python
-  from enhanced_api import router as enhanced_router
-  app.include_router(enhanced_router)
-  ```
-
-  After mounting the router, the enhanced endpoints will be available at `/api/v1/...`.
+`backend/enhanced_api.py` contains an `APIRouter` with enhanced routes (prefixed with `/api/v1`, e.g. `/api/v1/reports/analyze`, `/api/v1/memory/store`, `/api/v1/agent/query`, etc.). These endpoints are mounted when available and are accessible at `/api/v1/...`.
 
 If you want, I can:
 
@@ -418,6 +423,11 @@ Notes:
 - "I have a severe headache"
 - "When should I take my iron tablets?"
 
+**Agent Routing:**
+- Free-form Telegram messages are classified and routed to specialized agents.
+- Nutrition → Nutrition Agent; Medication → Medication Agent; Appointments → ASHA Agent; Emergencies → Emergency Agent.
+- If `GEMINI_API_KEY` is set, Gemini provides intent classification and safe fallback responses using `GEMINI_MODEL_NAME` (default `gemini-2.5-flash`).
+
 ---
 
 ## 📊 Analytics Dashboard
@@ -456,6 +466,14 @@ Agents can be configured in individual files:
 - `backend/agents/emergency_agent.py` - Emergency protocols
 - `backend/agents/nutrition_agent.py` - Meal plans
 - etc.
+
+### **Admin Approvals**
+- Frontend Approvals page at `/admin/approvals` (ADMIN only).
+- Backend endpoints:
+  - `GET /auth/register-requests` — list pending requests.
+  - `POST /auth/register-requests/{request_id}/decision` — approve or reject.
+- Frontend attaches Supabase JWT automatically to protected routes.
+- Ensure an ADMIN user exists (see `infra/supabase/schema.sql`).
 
 ---
 
