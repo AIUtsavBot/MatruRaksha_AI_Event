@@ -4,7 +4,13 @@ WORKDIR /app
 
 # Install system dependencies commonly required for Python packages
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential gcc libpq-dev curl \
+    && apt-get install -y --no-install-recommends \
+       build-essential \
+       gcc \
+       libpq-dev \
+       curl \
+       tesseract-ocr \
+       poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -18,7 +24,9 @@ COPY . .
 # Expose the default port used by the app (can be overridden via PORT env)
 EXPOSE 8000
 
-# Default command: prefer running with uvicorn if available (common for FastAPI),
-# otherwise fall back to running main.py or enhanced_api.py directly.
-# This keeps the image flexible across different setups in the repo.
+# Runtime environment
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8000
+
+# Default command: run FastAPI with uvicorn
 CMD ["python","main.py"]
