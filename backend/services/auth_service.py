@@ -110,6 +110,7 @@ class AuthService:
     @staticmethod
     async def create_registration_request(
         email: str,
+        password: str,
         full_name: str,
         role: str,
         phone: Optional[str] = None,
@@ -117,11 +118,22 @@ class AuthService:
         degree_cert_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Create a pending registration request
+        Create a pending registration request with encrypted password
         """
         try:
             if role not in ["DOCTOR", "ASHA_WORKER"]:
                 raise ValueError("Invalid role. Only DOCTOR or ASHA_WORKER allowed")
+
+            # Encrypt the password using Fernet (reversible encryption)
+            from cryptography.fernet import Fernet
+            import base64
+            import hashlib
+            
+            # Create a key from service role key (or use a dedicated encryption key)
+            key_source = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "default_key")[:32]
+            key = base64.urlsafe_b64encode(hashlib.sha256(key_source.encode()).digest())
+            fernet = Fernet(key)
+            encrypted_password = fernet.encrypt(password.encode()).decode()
 
             payload = {
                 "email": email,
@@ -130,13 +142,18 @@ class AuthService:
                 "phone": phone,
                 "assigned_area": assigned_area,
                 "degree_cert_url": degree_cert_url,
+                "password_hash": encrypted_password,  # Actually encrypted, not hashed
                 "status": "PENDING"
             }
             resp = supabase_admin.table("registration_requests").insert(payload).execute()
-            return resp.data[0] if resp.data else payload
+            # Don't return password to client
+            result = resp.data[0] if resp.data else payload
+            result.pop("password_hash", None)
+            return result
         except Exception as e:
             logger.error(f"❌ Create registration request error: {e}")
             raise
+
 
     @staticmethod
     async def list_registration_requests(status_filter: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -168,25 +185,49 @@ class AuthService:
             full_name = req.get("full_name")
             phone = req.get("phone")
             assigned_area = req.get("assigned_area")
+            encrypted_password = req.get("password_hash")
 
+            # Decrypt the password if available, otherwise generate temp password
             import secrets
-            temp_password = secrets.token_urlsafe(12)
+            if encrypted_password:
+                try:
+                    from cryptography.fernet import Fernet
+                    import base64
+                    import hashlib
+                    
+                    key_source = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "default_key")[:32]
+                    key = base64.urlsafe_b64encode(hashlib.sha256(key_source.encode()).digest())
+                    fernet = Fernet(key)
+                    user_password = fernet.decrypt(encrypted_password.encode()).decode()
+                    logger.info(f"Successfully decrypted password for {email}")
+                except Exception as decrypt_error:
+                    logger.warning(f"Could not decrypt password: {decrypt_error}, using temp password")
+                    user_password = secrets.token_urlsafe(16)
+            else:
+                # No encrypted password stored, generate temp password
+                user_password = secrets.token_urlsafe(16)
 
-            created = supabase_admin.auth.admin.create_user({
-                "email": email,
-                "password": temp_password,
-                "email_confirm": True,
-                "user_metadata": {
-                    "full_name": full_name,
-                    "role": role,
-                    "phone": phone,
-                    "assigned_area": assigned_area
-                }
-            })
+            try:
+                logger.info(f"Creating user with email: {email}, role: {role}")
+                created = supabase_admin.auth.admin.create_user({
+                    "email": email,
+                    "password": user_password,
+                    "email_confirm": True,
+                    "user_metadata": {
+                        "full_name": full_name,
+                        "role": role,
+                        "phone": phone,
+                        "assigned_area": assigned_area
+                    }
+                })
+                logger.info(f"Create user response: {created}")
+            except Exception as create_error:
+                logger.error(f"❌ Supabase create_user error: {create_error}")
+                raise Exception(f"Failed to create user: {create_error}")
 
             user_id = created.user.id if getattr(created, "user", None) else None
             if not user_id:
-                raise Exception("Failed to create user")
+                raise Exception("Failed to create user - no user ID returned")
 
             supabase_admin.table("user_profiles").update({
                 "full_name": full_name,

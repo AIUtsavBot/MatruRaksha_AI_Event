@@ -79,9 +79,10 @@ except ImportError as e:
 # ==================== AI AGENTS IMPORT ====================
 try:
     try:
-        from backend.agents.orchestrator import orchestrator
+        from backend.agents.orchestrator import get_orchestrator
     except ImportError:
-        from agents.orchestrator import orchestrator
+        from agents.orchestrator import get_orchestrator
+    orchestrator = get_orchestrator()
     AGENTS_AVAILABLE = True
     logger.info("✅ AI Agents loaded successfully")
 except ImportError as e:
@@ -89,6 +90,7 @@ except ImportError as e:
     logger.warning("⚠️  System will work without AI agents")
     AGENTS_AVAILABLE = False
     orchestrator = None
+
 
 # ==================== PYDANTIC MODELS ====================
 class Mother(BaseModel):

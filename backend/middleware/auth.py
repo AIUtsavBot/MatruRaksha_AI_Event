@@ -45,11 +45,19 @@ class AuthMiddleware:
         try:
             token = credentials.credentials
             
-            # Verify token with Supabase
-            user_client = create_client(SUPABASE_URL, SUPABASE_KEY)
-            user_client.auth.set_session(token, None)
-            
-            response = user_client.auth.get_user()
+            # Verify token with Supabase using the token directly
+            try:
+                # Try using get_user with jwt parameter (newer API)
+                response = supabase.auth.get_user(token)
+            except Exception:
+                # Fallback: Create a new client and set session
+                user_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+                try:
+                    user_client.auth.set_session(token, token)  # Both access and refresh
+                except TypeError:
+                    # Older API - just pass the token
+                    user_client.auth.set_session(token, None)
+                response = user_client.auth.get_user()
             
             if not response.user:
                 raise HTTPException(
