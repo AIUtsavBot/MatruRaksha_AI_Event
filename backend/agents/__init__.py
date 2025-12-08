@@ -4,7 +4,7 @@ from .nutrition_agent import NutritionAgent
 from .medication_agent import MedicationAgent
 from .emergency_agent import EmergencyAgent
 from .asha_agent import AshaAgent
-from .orchestrator import orchestrator, AgentOrchestrator
+from .orchestrator import get_orchestrator, OrchestratorAgent, route_message
 
 __all__ = [
     'RiskAgent',
@@ -13,6 +13,7 @@ __all__ = [
     'MedicationAgent',
     'EmergencyAgent',
     'AshaAgent',
-    'orchestrator',
-    'AgentOrchestrator'
+    'get_orchestrator',
+    'OrchestratorAgent',
+    'route_message'
 ]

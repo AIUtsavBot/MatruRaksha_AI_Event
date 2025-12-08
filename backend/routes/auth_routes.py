@@ -57,6 +57,7 @@ class AuthResponse(BaseModel):
 
 class RegisterRequest(BaseModel):
     email: str = Field(..., pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    password: str = Field(..., min_length=8, description="Password for the account")
     full_name: str = Field(..., min_length=1)
     role: str = Field(..., pattern="^(DOCTOR|ASHA_WORKER)$")
     phone: Optional[str] = None
@@ -226,6 +227,7 @@ async def create_register_request(request: RegisterRequest):
     try:
         result = await auth_service.create_registration_request(
             email=request.email,
+            password=request.password,
             full_name=request.full_name,
             role=request.role,
             phone=request.phone,
@@ -236,6 +238,7 @@ async def create_register_request(request: RegisterRequest):
     except Exception as e:
         logger.error(f"❌ Register request error: {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 
 
 @router.get("/register-requests")

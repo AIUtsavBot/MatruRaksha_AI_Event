@@ -183,6 +183,25 @@ alter table public.case_discussions
 
 -- ===== Authentication & Authorization System =====
 
+-- Registration requests table (for admin approval workflow)
+create table if not exists public.registration_requests (
+  id bigserial primary key,
+  email text not null unique,
+  full_name text not null,
+  role_requested text not null check (role_requested in ('DOCTOR', 'ASHA_WORKER')),
+  phone text,
+  assigned_area text,
+  degree_cert_url text,
+  status text not null default 'PENDING' check (status in ('PENDING', 'APPROVED', 'REJECTED')),
+  reviewed_by uuid,
+  review_note text,
+  reviewed_at timestamptz,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_registration_requests_status on public.registration_requests(status);
+create index if not exists idx_registration_requests_email on public.registration_requests(email);
+
 -- Create user roles enum
 create type user_role as enum ('ADMIN', 'DOCTOR', 'ASHA_WORKER');
 
