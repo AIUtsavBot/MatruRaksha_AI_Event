@@ -42,11 +42,11 @@ MatruRakshaAI is an intelligent maternal health monitoring system that leverages
 - Natural language query processing
 - Emergency protocol activation
 
-### 🌐 Multilingual Chatbot (Upcoming / In progress)
-- Natural-language conversational support in multiple Indian languages (Hindi, Tamil, Telugu, Bengali, Marathi, and more)
-- Automatic language detection and user-preferred language persistence
-- Voice & text modes: receive voice messages, transcribe, and respond in the user's language
-- Localized prompts and culturally-aware responses for better engagement and comprehension
+### 🌐 Multilingual Support
+- Full UI localization in **English, Hindi, and Marathi**
+- User-preferred language persistence across sessions
+- Localized prompts, labels, and culturally-aware responses
+- i18next-powered internationalization for seamless language switching
 
 ### 📊 **Continuous Care System**
 - Daily health monitoring (40-week journey)
@@ -55,12 +55,12 @@ MatruRakshaAI is an intelligent maternal health monitoring system that leverages
 - Health timeline and trend analysis
 - Risk progression tracking
 
-### 👩‍⚕️ **Healthcare Worker Tools**
-- ASHA visit scheduling and reporting
-- Emergency alert system
-- Risk-based visit frequency
-- Comprehensive patient dashboard
-- Analytics and reporting
+### 👩‍⚕️ **Role-Based Dashboards**
+- **Admin Dashboard**: User approvals, system oversight, full access
+- **Doctor Dashboard**: Patient case discussions, medical oversight
+- **ASHA Interface**: Visit scheduling, assigned mothers, field coordination
+- **Risk Dashboard**: Health analytics, risk distributions, vital signs tracking
+- Role-based route protection (ADMIN, DOCTOR, ASHA_WORKER)
 
 ---
 
@@ -119,11 +119,13 @@ MatruRakshaAI is an intelligent maternal health monitoring system that leverages
 - **API:** REST with async support
 
 ### **Frontend**
-- **Framework:** React 18
-- **Build Tool:** Vite
-- **Styling:** Tailwind CSS
-- **Charts:** Recharts
+- **Framework:** React 18.2
+- **Build Tool:** Vite 7
+- **Styling:** Tailwind CSS 3.4
+- **Charts:** Recharts 3.3
 - **Icons:** Lucide React
+- **Internationalization:** i18next (English, Hindi, Marathi)
+- **Routing:** React Router DOM 7
 
 ### **Integration**
 - **Messaging:** Telegram Bot API
@@ -151,8 +153,8 @@ MatruRakshaAI is an intelligent maternal health monitoring system that leverages
 
 ### **1. Clone Repository**
 ```bash
-git clone https://github.com/yourusername/maatru-raksha-ai.git
-cd maatru-raksha-ai
+git clone https://github.com/AIUtsavBot/MatruRaksha_AI_Event.git
+cd MatruRaksha_AI_Event
 ```
 
 ### **2. Backend Setup**
@@ -572,8 +574,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-For issues, questions, or contributions:
-- **GitHub Issues**: [Create an issue](https://github.com/yourusername/maatru-raksha-ai/issues)
+- **GitHub Issues**: [Create an issue](https://github.com/AIUtsavBot/MatruRaksha_AI_Event/issues)
 - **Email**: support@matruraksha.ai
 - **Telegram**: [@MatruRakshaSupport](https://t.me/MatruRakshaSupport)
 
@@ -581,43 +582,51 @@ For issues, questions, or contributions:
 
 ## 🙏 Acknowledgments
 
-- **Anthropic Claude** - AI assistance and agent orchestration
+- **Google Gemini AI** - AI-powered document analysis and intent classification
 - **Supabase** - Database and authentication
 - **Telegram** - Messaging platform
 - **FastAPI** - Modern Python web framework
 - **React** - Frontend library
+- **i18next** - Internationalization framework
 - **ASHA Workers** - Community health workers inspiration
 
 ---
 
 ## 📈 Roadmap
 
-- [ ] Voice-based interaction (multilingual)
+### ✅ Completed
+- [x] Multi-language UI support (English, Hindi, Marathi)
+- [x] Role-based authentication (Admin, Doctor, ASHA Worker)
+- [x] Gemini AI-powered document analysis
+- [x] Telegram bot with conversational AI
+- [x] 6 Specialized AI agents for maternal care
+
+### 🚧 In Progress
+- [ ] Voice-based interaction (multilingual STT/TTS)
+- [ ] Additional languages (Tamil, Telugu, Bengali, Gujarati)
+
+### 📋 Planned
 - [ ] WhatsApp integration
 - [ ] IoT device integration (BP monitors, weight scales)
 - [ ] Predictive analytics for complications
 - [ ] Mobile app (iOS/Android)
-- [ ] Multi-language support (Hindi, Tamil, Telugu, Bengali)
-- [ ] Doctor portal
+- [ ] Doctor portal enhancements
 - [ ] SMS fallback for no internet
 - [ ] Offline mode support
 
 ### Upcoming features (priority & notes)
 
 - High priority
-  - Multilingual chatbot (text + voice): support for Hindi, Tamil, Telugu, Bengali, Marathi and auto-detection. This will integrate speech-to-text, translation layers where necessary, and localized response templates to ensure clinical accuracy and cultural relevance.
-  - Offline & SMS fallback: critical for low-connectivity areas to ensure reminders and alerts still reach mothers and ASHA workers.
+  - **Voice-based multilingual chatbot**: Integrate speech-to-text/text-to-speech for Hindi, Tamil, Telugu, Bengali, Marathi with translation layers for clinical accuracy and cultural relevance.
+  - **Offline & SMS fallback**: Critical for low-connectivity areas to ensure reminders and alerts reach mothers and ASHA workers.
 
 - Medium priority
-  - WhatsApp integration: reach users on a widely used messaging platform with end-to-end message templates and OTP flows.
-  - Mobile app (iOS/Android): a lightweight app for ASHA workers with offline sync and push notifications.
+  - **WhatsApp integration**: Reach users on a widely used platform with end-to-end message templates and OTP flows.
+  - **Mobile app (iOS/Android)**: Lightweight app for ASHA workers with offline sync and push notifications.
 
 - Lower priority
-  - IoT integration (BP monitors, scales): collect objective vitals when available; begin with Bluetooth-enabled devices and a standardized ingestion pipeline.
-  - Doctor portal and advanced analytics: role-based dashboards for clinicians and predictive models for early warning.
-
-Notes:
-- The "Multilingual chatbot" feature will require data collection for localization, evaluation with healthcare professionals for safety, and careful privacy considerations for user speech and text data.
+  - **IoT integration (BP monitors, scales)**: Collect objective vitals via Bluetooth-enabled devices.
+  - **Doctor portal and advanced analytics**: Role-based dashboards for clinicians and predictive models for early warning.
 
 
 ---
