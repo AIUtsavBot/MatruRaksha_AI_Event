@@ -19,11 +19,12 @@ from enum import Enum
 logger = logging.getLogger(__name__)
 
 # Try to import Gemini for intent classification
+gemini_client = None
 try:
-    import google.generativeai as genai
+    from google import genai
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     if GEMINI_API_KEY:
-        genai.configure(api_key=GEMINI_API_KEY)
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
         GEMINI_AVAILABLE = True
     else:
         GEMINI_AVAILABLE = False
@@ -165,7 +166,8 @@ class OrchestratorAgent:
     def _ai_classify(self, message: str) -> Optional[AgentType]:
         """Use Gemini AI for intent classification (fast)"""
         try:
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            if not gemini_client:
+                return None
             
             prompt = f"""
 Classify this maternal health message into ONE category:
@@ -181,7 +183,10 @@ Message: "{message}"
 Respond with ONLY the category name (one word).
 """
             
-            response = model.generate_content(prompt)
+            response = gemini_client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt
+            )
             category = response.text.strip().upper()
             
             # Map to AgentType
@@ -250,7 +255,7 @@ Respond with ONLY the category name (one word).
         reports_context: List[Dict[str, Any]]
     ) -> str:
         """Fallback response using Gemini directly"""
-        if not GEMINI_AVAILABLE:
+        if not GEMINI_AVAILABLE or not gemini_client:
             return (
                 "⚠️ I'm sorry, I'm having trouble processing your request right now. "
                 "Please try again in a moment or contact your healthcare provider if urgent."
@@ -262,7 +267,6 @@ Respond with ONLY the category name (one word).
                 or os.getenv('GEMINI_MODEL_NAME')
                 or 'gemini-2.5-flash'
             )
-            model = genai.GenerativeModel(model_name)
             
             # Build context
             context_info = f"""
@@ -297,7 +301,10 @@ If urgent, advise consulting healthcare provider immediately.
 Response:
 """
             
-            response = model.generate_content(prompt)
+            response = gemini_client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
             return response.text.replace('*', '').replace('_', '').replace('`', '')
             
         except Exception as e:

@@ -8,7 +8,7 @@ import logging
 from typing import Dict, List, Optional
 from datetime import datetime
 import json
-import google.generativeai as genai
+from google import genai
 from supabase import create_client
 
 logger = logging.getLogger(__name__)
@@ -18,8 +18,9 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
+gemini_client = None
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 
@@ -31,11 +32,12 @@ class GeminiService:
     """
     
     def __init__(self):
-        if not GEMINI_API_KEY:
+        if not GEMINI_API_KEY or not gemini_client:
             logger.warning("⚠️  GEMINI_API_KEY not set")
-            self.model = None
+            self.client = None
         else:
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            self.client = gemini_client
+            self.model_name = 'gemini-1.5-flash'
             logger.info("✅ Gemini service initialized")
         self.db = supabase
     
@@ -115,7 +117,7 @@ Guidelines:
         Query using Gemini with mother's full context
         """
         
-        if not self.model:
+        if not self.client:
             return "AI service is not available. Please set GEMINI_API_KEY in configuration."
         
         try:
@@ -150,8 +152,11 @@ Guidelines:
 ===== YOUR RESPONSE =====
 Provide a helpful, personalized answer based on the context above. Be warm, clear, and supportive."""
             
-            # Call Gemini
-            response = self.model.generate_content(full_prompt)
+            # Call Gemini using new client API
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=full_prompt
+            )
             answer = response.text
             
             logger.info(f"✅ Generated response for mother {mother_id}")

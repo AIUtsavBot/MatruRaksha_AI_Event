@@ -5,7 +5,6 @@ All specialized agents inherit from this base class
 
 import os
 import logging
-from datetime import datetime
 from typing import Dict, Any, List
 from abc import ABC, abstractmethod
 from dotenv import load_dotenv
@@ -15,11 +14,12 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # Import Gemini
+gemini_client = None
 try:
-    import google.generativeai as genai
+    from google import genai
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     if GEMINI_API_KEY:
-        genai.configure(api_key=GEMINI_API_KEY)
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
         GEMINI_AVAILABLE = True
     else:
         GEMINI_AVAILABLE = False
@@ -40,11 +40,12 @@ class BaseAgent(ABC):
     def __init__(self, agent_name: str, agent_role: str):
         self.agent_name = agent_name
         self.agent_role = agent_role
-        self.model = None
+        self.client = None
+        self.model_name = GEMINI_MODEL_NAME
         
-        if GEMINI_AVAILABLE:
+        if GEMINI_AVAILABLE and gemini_client:
             try:
-                self.model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+                self.client = gemini_client
                 logger.info(f"✅ {agent_name} initialized with Gemini model: {GEMINI_MODEL_NAME}")
             except Exception as e:
                 logger.error(f"❌ {agent_name} failed to initialize: {e}")
@@ -77,6 +78,7 @@ class BaseAgent(ABC):
         due_date = profile.get('due_date')
         if due_date:
             try:
+                from datetime import datetime
                 due_dt = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
                 due_str = due_dt.strftime("%B %d, %Y")
                 # Calculate pregnancy week (assuming 40 weeks from LMP to due date)
@@ -111,6 +113,7 @@ class BaseAgent(ABC):
             facility = next_appt.get('facility', '')
             status = next_appt.get('status', '')
             try:
+                from datetime import datetime
                 appt_dt = datetime.fromisoformat(appt_date.replace('Z', '+00:00'))
                 pretty_date = appt_dt.strftime("%B %d, %Y at %I:%M %p")
             except:
@@ -221,52 +224,6 @@ class BaseAgent(ABC):
                 if m.get('weight_kg') is not None:
                     context_parts.append(f"Weight: {m.get('weight_kg')}")
             context_parts.append("")
-        
-        # Add nutrition plans
-        nutrition_plans = data.get('nutrition_plans') or []
-        if nutrition_plans:
-            context_parts.append("===== NUTRITION PLANS (Doctor Prescribed) =====")
-            for np in nutrition_plans[:3]:
-                trimester = np.get('trimester', 'N/A')
-                plan = np.get('plan', '')
-                created = np.get('created_at', '')[:10] if np.get('created_at') else ''
-                context_parts.append(f"Trimester {trimester} Plan ({created}):")
-                context_parts.append(f"  {plan[:500]}..." if len(plan) > 500 else f"  {plan}")
-            context_parts.append("")
-        
-        # Add prescriptions/medications
-        prescriptions = data.get('prescriptions') or []
-        if prescriptions:
-            context_parts.append("===== CURRENT MEDICATIONS (Doctor Prescribed) =====")
-            for rx in prescriptions[:10]:
-                med_name = rx.get('medication', 'Unknown')
-                dosage = rx.get('dosage', '')
-                schedule = rx.get('schedule', {})
-                schedule_text = schedule.get('instructions', '') if isinstance(schedule, dict) else str(schedule)
-                start_date = rx.get('start_date', '')
-                end_date = rx.get('end_date', '')
-                date_range = f" ({start_date} to {end_date})" if start_date and end_date else ""
-                context_parts.append(f"• {med_name} - {dosage}{' - ' + schedule_text if schedule_text else ''}{date_range}")
-            context_parts.append("")
-        
-        # Add upcoming appointments
-        appointments = data.get('appointments') or []
-        if appointments:
-            context_parts.append("===== UPCOMING APPOINTMENTS =====")
-            for appt in appointments[:5]:
-                appt_date = appt.get('appointment_date', '')
-                appt_type = appt.get('appointment_type', 'General')
-                facility = appt.get('facility', '')
-                status = appt.get('status', '')
-                try:
-                    appt_dt = datetime.fromisoformat(appt_date.replace('Z', '+00:00'))
-                    pretty_date = appt_dt.strftime("%B %d, %Y at %I:%M %p")
-                except:
-                    pretty_date = appt_date
-                context_parts.append(f"• {appt_type}: {pretty_date} at {facility} ({status})")
-            context_parts.append("")
-        
-        # Add ASHA worker info
         asha = data.get('asha_worker')
         if asha:
             context_parts.append("===== ASSIGNED ASHA WORKER =====")
@@ -275,17 +232,6 @@ class BaseAgent(ABC):
                 context_parts.append(f"Phone: {asha.get('phone')}")
             if asha.get('assigned_area'):
                 context_parts.append(f"Area: {asha.get('assigned_area')}")
-            context_parts.append("")
-        
-        # Add Doctor info
-        doctor = data.get('doctor')
-        if doctor:
-            context_parts.append("===== ASSIGNED DOCTOR =====")
-            context_parts.append(f"Name: Dr. {doctor.get('name')}")
-            if doctor.get('phone'):
-                context_parts.append(f"Phone: {doctor.get('phone')}")
-            if doctor.get('assigned_area'):
-                context_parts.append(f"Area: {doctor.get('assigned_area')}")
             context_parts.append("")
         
         return "\n".join(context_parts)
@@ -298,7 +244,7 @@ class BaseAgent(ABC):
         language: str = 'en'
     ) -> str:
         """Process a query and return response"""
-        if not self.model:
+        if not self.client:
             return (
                 f"⚠️ {self.agent_name} is currently unavailable. "
                 "Please try again later or contact support."
@@ -322,8 +268,11 @@ User Question: {query}
 Response:
 """
             
-            # Generate response
-            response = self.model.generate_content(full_prompt)
+            # Generate response using new client API
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=full_prompt
+            )
             
             # Clean response
             cleaned_response = response.text.strip()

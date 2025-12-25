@@ -62,10 +62,11 @@ except Exception as e:
     supabase = None
 
 # ==================== GEMINI AI INITIALIZATION ====================
+gemini_client = None
 try:
-    import google.generativeai as genai
+    from google import genai
     if GEMINI_API_KEY:
-        genai.configure(api_key=GEMINI_API_KEY)
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
         GEMINI_AVAILABLE = True
         logger.info("✅ Gemini AI initialized")
     else:
@@ -73,7 +74,7 @@ try:
         logger.warning("⚠️  Gemini API key not set")
 except ImportError as e:
     logger.warning(f"⚠️  Gemini not available: {e}")
-    logger.warning("⚠️  Install with: pip install google-generativeai")
+    logger.warning("⚠️  Install with: pip install google-genai")
     GEMINI_AVAILABLE = False
 
 # ==================== AI AGENTS IMPORT ====================
@@ -119,7 +120,6 @@ class RiskAssessment(BaseModel):
     epigastric_pain: int = 0
     vaginal_bleeding: int = 0
     notes: Optional[str] = None
-    asha_worker_id: Optional[int] = None  # Track which ASHA worker performed the assessment
 
 class DocumentAnalysisRequest(BaseModel):
     report_id: str  # UUID as string
@@ -389,20 +389,6 @@ if auth_router:
     except Exception:
         pass
 
-# Mount admin router
-admin_router = None
-try:
-    from backend.routes.admin_routes import router as admin_router
-except Exception:
-    try:
-        from routes.admin_routes import router as admin_router
-    except Exception as e:
-        logger.warning(f"⚠️  Admin routes not available: {e}")
-
-if admin_router:
-    app.include_router(admin_router)
-    logger.info("✅ Admin routes loaded")
-
 # ==================== CORS SETUP ====================
 # Configure CORS to explicitly allow the frontend origin
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").strip()
@@ -626,21 +612,13 @@ Analyze the medical report and extract the following information in a structured
 Provide ONLY the JSON output, no additional text.
 """
         
-        # Try different model names (API versions vary)
-        model_names = ['gemini-2.5-flash']
-        model = None
+        # Use the global gemini_client for API calls
+        model_name = 'gemini-2.5-flash'
         
-        for model_name in model_names:
-            try:
-                model = genai.GenerativeModel(model_name)
-                logger.info(f"✅ Using Gemini model: {model_name}")
-                break
-            except Exception as e:
-                logger.warning(f"⚠️  Model {model_name} not available: {e}")
-                continue
+        if not gemini_client:
+            raise Exception("Gemini client not initialized")
         
-        if not model:
-            raise Exception("No Gemini models available")
+        logger.info(f"✅ Using Gemini model: {model_name}")
         
         # If it's an image, we can pass it directly to Gemini
         if file_type.startswith('image/'):
@@ -654,23 +632,30 @@ Provide ONLY the JSON output, no additional text.
                 import io
                 image = PIL.Image.open(io.BytesIO(response.content))
                 
-                # Generate response with image
-                response = model.generate_content([prompt, image])
-                ai_response = response.text
+                # Generate response with image using new client API
+                result = gemini_client.models.generate_content(
+                    model=model_name,
+                    contents=[prompt, image]
+                )
+                ai_response = result.text
                 
             except Exception as img_error:
                 logger.error(f"Error processing image: {img_error}")
                 # Fallback to text-only analysis
-                response = model.generate_content(prompt + f"\n\nNote: Could not load image from URL: {file_url}")
-                ai_response = response.text
+                result = gemini_client.models.generate_content(
+                    model=model_name,
+                    contents=prompt + f"\n\nNote: Could not load image from URL: {file_url}"
+                )
+                ai_response = result.text
         else:
             # For PDFs and other documents, use text-only analysis
             # Note: For full PDF parsing, you'd need to extract text first
-            response = model.generate_content(
-                prompt + f"\n\nDocument URL: {file_url}\nFile Type: {file_type}\n\n"
+            result = gemini_client.models.generate_content(
+                model=model_name,
+                contents=prompt + f"\n\nDocument URL: {file_url}\nFile Type: {file_type}\n\n"
                 "Note: Please provide a general analysis based on typical maternal health reports."
             )
-            ai_response = response.text
+            ai_response = result.text
         
         logger.info(f"✅ Gemini response received: {len(ai_response)} characters")
         
@@ -1034,7 +1019,7 @@ async def assess_risk(assessment: RiskAssessment, background_tasks: BackgroundTa
         risk_calculation = calculate_risk_score(assessment)
         logger.info(f"📈 Risk calculation: {risk_calculation}")
         
-        # Save assessment to database (include both asha_worker_id and doctor_id)
+        # Save assessment to database
         insert_data = {
             "mother_id": assessment.mother_id,
             "systolic_bp": assessment.systolic_bp,
@@ -1051,81 +1036,28 @@ async def assess_risk(assessment: RiskAssessment, background_tasks: BackgroundTa
             "risk_score": float(risk_calculation["risk_score"]),
             "risk_level": str(risk_calculation["risk_level"]),
             "notes": assessment.notes,
-            "asha_worker_id": assessment.asha_worker_id,  # Track which ASHA worker
-            "doctor_id": mother_data.get("doctor_id"),  # Track assigned doctor
             "created_at": datetime.now().isoformat()
         }
         
         result = supabase.table("risk_assessments").insert(insert_data).execute()
         logger.info(f"✅ Risk assessment saved: {risk_calculation['risk_level']}")
         
-        # Send Telegram notification with assessment summary to mother
-        telegram_sent = False
-        if mother_data.get("telegram_chat_id"):
+        # Send alert if high risk
+        if risk_calculation["risk_level"] == "HIGH" and mother_data.get("telegram_chat_id"):
             try:
-                import requests
+                from services.telegram_service import telegram_service
                 
-                risk_emoji = {
-                    "HIGH": "🔴",
-                    "MODERATE": "🟡",
-                    "LOW": "🟢"
-                }
+                risk_factors_text = "\n".join([f"• {rf}" for rf in risk_calculation["risk_factors"]])
                 
-                emoji = risk_emoji.get(risk_calculation["risk_level"], "⚠️")
-                risk_factors_text = ""
-                if risk_calculation["risk_factors"]:
-                    risk_factors_text = "\\n".join([f"• {rf}" for rf in risk_calculation["risk_factors"]])
-                else:
-                    risk_factors_text = "• No significant risk factors detected"
-                
-                # Build vitals summary
-                vitals_text = []
-                if assessment.systolic_bp and assessment.diastolic_bp:
-                    vitals_text.append(f"• Blood Pressure: {assessment.systolic_bp}/{assessment.diastolic_bp} mmHg")
-                if assessment.heart_rate:
-                    vitals_text.append(f"• Heart Rate: {assessment.heart_rate} bpm")
-                if assessment.blood_glucose:
-                    vitals_text.append(f"• Blood Glucose: {assessment.blood_glucose} mg/dL")
-                if assessment.hemoglobin:
-                    vitals_text.append(f"• Hemoglobin: {assessment.hemoglobin} g/dL")
-                
-                vitals_summary = "\\n".join(vitals_text) if vitals_text else "• No vitals recorded"
-                
-                message = f"""{emoji} <b>Health Assessment Report</b>
-
-👤 <b>Name:</b> {mother_data.get('name', 'Mother')}
-📅 <b>Date:</b> {datetime.now().strftime('%d %B %Y, %I:%M %p')}
-
-{emoji} <b>Risk Level:</b> {risk_calculation['risk_level']}
-📊 <b>Risk Score:</b> {risk_calculation['risk_score']*100:.0f}%
-
-📋 <b>Vitals Recorded:</b>
-{vitals_summary}
-
-⚠️ <b>Risk Factors:</b>
-{risk_factors_text}
-
-💡 <b>Recommendations:</b>
-{f'⚕️ HIGH RISK - Please consult your healthcare provider immediately.' if risk_calculation['risk_level'] == 'HIGH' else f'✅ Continue with regular check-ups and healthy habits.' if risk_calculation['risk_level'] == 'LOW' else '📋 Schedule a follow-up with your healthcare provider.'}
-
-Stay healthy! 🤰💕"""
-
-                # Send via Telegram API
-                telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-                response = requests.post(telegram_url, json={
-                    "chat_id": mother_data["telegram_chat_id"],
-                    "text": message,
-                    "parse_mode": "HTML"
-                }, timeout=10)
-                
-                if response.status_code == 200:
-                    telegram_sent = True
-                    logger.info(f"✅ Telegram notification sent to {mother_data['name']}")
-                else:
-                    logger.warning(f"⚠️ Telegram send failed: {response.text}")
-                    
+                telegram_service.send_message(
+                    chat_id=mother_data["telegram_chat_id"],
+                    message=f"⚠️ *HIGH RISK ALERT*\n\n"
+                            f"Risk Score: {risk_calculation['risk_score']:.2f}\n\n"
+                            f"*Risk Factors:*\n{risk_factors_text}\n\n"
+                            f"⚕️ Please consult with your healthcare provider immediately."
+                )
             except Exception as telegram_error:
-                logger.error(f"⚠️ Telegram notification failed: {telegram_error}")
+                logger.error(f"⚠️  Telegram alert failed: {telegram_error}")
         
         return {
             "status": "success",
@@ -1133,7 +1065,6 @@ Stay healthy! 🤰💕"""
             "risk_score": risk_calculation["risk_score"],
             "risk_level": risk_calculation["risk_level"],
             "risk_factors": risk_calculation["risk_factors"],
-            "telegram_sent": telegram_sent,
             "data": result.data[0] if result.data else None
         }
     
@@ -1218,213 +1149,6 @@ def get_dashboard_analytics():
         
     except Exception as e:
         logger.error(f"❌ Error fetching analytics: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching analytics: {str(e)}"
-        )
-
-
-@app.get("/analytics/asha/{asha_worker_id}")
-def get_asha_analytics(asha_worker_id: int):
-    """Get analytics dashboard data for a specific ASHA worker"""
-    try:
-        if not supabase:
-            return {
-                "status": "success",
-                "asha_worker_id": asha_worker_id,
-                "total_mothers": 0,
-                "high_risk_count": 0,
-                "moderate_risk_count": 0,
-                "low_risk_count": 0,
-                "total_assessments": 0,
-                "timestamp": datetime.now().isoformat()
-            }
-        
-        # Get mothers assigned to this ASHA worker
-        mothers_result = supabase.table("mothers").select("*").eq("asha_worker_id", asha_worker_id).execute()
-        mothers = mothers_result.data if mothers_result.data else []
-        total_mothers = len(mothers)
-        mother_ids = [m["id"] for m in mothers]
-        
-        # Get assessments performed by this ASHA worker
-        assessments_result = supabase.table("risk_assessments").select("*").eq("asha_worker_id", asha_worker_id).order("created_at", desc=True).execute()
-        assessments = assessments_result.data if assessments_result.data else []
-        
-        # Count risk levels from their assessments
-        high_risk = sum(1 for a in assessments if a.get("risk_level") == "HIGH")
-        moderate_risk = sum(1 for a in assessments if a.get("risk_level") == "MODERATE")
-        low_risk = sum(1 for a in assessments if a.get("risk_level") == "LOW")
-        
-        # Get recent assessments (last 10) with full data
-        recent_assessments = []
-        for a in assessments[:10]:
-            mother = next((m for m in mothers if m["id"] == a.get("mother_id")), {})
-            recent_assessments.append({
-                "id": a.get("id"),
-                "mother_name": mother.get("name", "Unknown"),
-                "mother_id": a.get("mother_id"),
-                "risk_level": a.get("risk_level"),
-                "risk_score": a.get("risk_score"),
-                "created_at": a.get("created_at"),
-                # Include vitals
-                "systolic_bp": a.get("systolic_bp"),
-                "diastolic_bp": a.get("diastolic_bp"),
-                "heart_rate": a.get("heart_rate"),
-                "blood_glucose": a.get("blood_glucose"),
-                "hemoglobin": a.get("hemoglobin")
-            })
-        
-        return {
-            "status": "success",
-            "asha_worker_id": asha_worker_id,
-            "total_mothers": total_mothers,
-            "high_risk_count": high_risk,
-            "moderate_risk_count": moderate_risk,
-            "low_risk_count": low_risk,
-            "total_assessments": len(assessments),
-            "recent_assessments": recent_assessments,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        logger.error(f"❌ Error fetching ASHA analytics: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching analytics: {str(e)}"
-        )
-
-
-@app.get("/asha-worker/by-email/{email}")
-def get_asha_worker_by_email(email: str):
-    """Get ASHA worker ID by email address"""
-    try:
-        if not supabase:
-            raise HTTPException(status_code=503, detail="Database not connected")
-        
-        # First get user_profile by email
-        profile_result = supabase.table("user_profiles").select("*").eq("email", email).execute()
-        
-        if not profile_result.data:
-            # Try getting from asha_workers directly by email
-            asha_result = supabase.table("asha_workers").select("*").eq("email", email).execute()
-            if asha_result.data:
-                return {
-                    "success": True,
-                    "asha_worker_id": asha_result.data[0]["id"],
-                    "name": asha_result.data[0].get("name"),
-                    "assigned_area": asha_result.data[0].get("assigned_area")
-                }
-            return {"success": False, "asha_worker_id": None}
-        
-        profile = profile_result.data[0]
-        
-        # Check if asha_worker_id is in profile
-        if profile.get("asha_worker_id"):
-            return {
-                "success": True,
-                "asha_worker_id": profile["asha_worker_id"],
-                "name": profile.get("full_name")
-            }
-        
-        # Try to find matching ASHA worker by name or phone
-        name = profile.get("full_name")
-        phone = profile.get("phone")
-        
-        if name:
-            asha_result = supabase.table("asha_workers").select("*").eq("name", name).execute()
-            if asha_result.data:
-                # Link the asha_worker_id to user_profile
-                supabase.table("user_profiles").update({
-                    "asha_worker_id": asha_result.data[0]["id"]
-                }).eq("id", profile["id"]).execute()
-                
-                return {
-                    "success": True,
-                    "asha_worker_id": asha_result.data[0]["id"],
-                    "name": asha_result.data[0].get("name")
-                }
-        
-        if phone:
-            asha_result = supabase.table("asha_workers").select("*").eq("phone", phone).execute()
-            if asha_result.data:
-                # Link the asha_worker_id to user_profile
-                supabase.table("user_profiles").update({
-                    "asha_worker_id": asha_result.data[0]["id"]
-                }).eq("id", profile["id"]).execute()
-                
-                return {
-                    "success": True,
-                    "asha_worker_id": asha_result.data[0]["id"],
-                    "name": asha_result.data[0].get("name")
-                }
-        
-        return {"success": False, "asha_worker_id": None, "message": "No linked ASHA worker found"}
-        
-    except Exception as e:
-        logger.error(f"❌ Error finding ASHA worker: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/analytics/doctor/{doctor_id}")
-def get_doctor_analytics(doctor_id: int):
-    """Get analytics and assessments for a specific doctor"""
-    try:
-        if not supabase:
-            return {
-                "status": "error",
-                "doctor_id": doctor_id,
-                "message": "Database not connected"
-            }
-        
-        # Get mothers assigned to this doctor
-        mothers_result = supabase.table("mothers").select("*").eq("doctor_id", doctor_id).execute()
-        mothers = mothers_result.data or []
-        total_mothers = len(mothers)
-        mother_ids = [m["id"] for m in mothers]
-        
-        # Get all assessments for these mothers (or by doctor_id directly)
-        assessments = []
-        if mother_ids:
-            assessments_result = supabase.table("risk_assessments").select("*").in_("mother_id", mother_ids).order("created_at", desc=True).execute()
-            assessments = assessments_result.data or []
-        
-        # Count by risk level
-        high_risk = sum(1 for a in assessments if a.get("risk_level") == "HIGH")
-        moderate_risk = sum(1 for a in assessments if a.get("risk_level") == "MODERATE")
-        low_risk = sum(1 for a in assessments if a.get("risk_level") == "LOW")
-        
-        # Get recent assessments with full data
-        recent_assessments = []
-        for a in assessments[:15]:
-            mother = next((m for m in mothers if m["id"] == a.get("mother_id")), {})
-            recent_assessments.append({
-                "id": a.get("id"),
-                "mother_name": mother.get("name", "Unknown"),
-                "mother_id": a.get("mother_id"),
-                "risk_level": a.get("risk_level"),
-                "risk_score": a.get("risk_score"),
-                "created_at": a.get("created_at"),
-                "systolic_bp": a.get("systolic_bp"),
-                "diastolic_bp": a.get("diastolic_bp"),
-                "heart_rate": a.get("heart_rate"),
-                "blood_glucose": a.get("blood_glucose"),
-                "hemoglobin": a.get("hemoglobin"),
-                "asha_worker_id": a.get("asha_worker_id")
-            })
-        
-        return {
-            "status": "success",
-            "doctor_id": doctor_id,
-            "total_mothers": total_mothers,
-            "high_risk_count": high_risk,
-            "moderate_risk_count": moderate_risk,
-            "low_risk_count": low_risk,
-            "total_assessments": len(assessments),
-            "recent_assessments": recent_assessments
-        }
-        
-    except Exception as e:
-        logger.error(f"❌ Error fetching doctor analytics: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching analytics: {str(e)}"
