@@ -14,11 +14,12 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # Import Gemini
+gemini_client = None
 try:
-    import google.generativeai as genai
+    from google import genai
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     if GEMINI_API_KEY:
-        genai.configure(api_key=GEMINI_API_KEY)
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
         GEMINI_AVAILABLE = True
     else:
         GEMINI_AVAILABLE = False
@@ -39,11 +40,12 @@ class BaseAgent(ABC):
     def __init__(self, agent_name: str, agent_role: str):
         self.agent_name = agent_name
         self.agent_role = agent_role
-        self.model = None
+        self.client = None
+        self.model_name = GEMINI_MODEL_NAME
         
-        if GEMINI_AVAILABLE:
+        if GEMINI_AVAILABLE and gemini_client:
             try:
-                self.model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+                self.client = gemini_client
                 logger.info(f"✅ {agent_name} initialized with Gemini model: {GEMINI_MODEL_NAME}")
             except Exception as e:
                 logger.error(f"❌ {agent_name} failed to initialize: {e}")
@@ -242,7 +244,7 @@ class BaseAgent(ABC):
         language: str = 'en'
     ) -> str:
         """Process a query and return response"""
-        if not self.model:
+        if not self.client:
             return (
                 f"⚠️ {self.agent_name} is currently unavailable. "
                 "Please try again later or contact support."
@@ -266,8 +268,11 @@ User Question: {query}
 Response:
 """
             
-            # Generate response
-            response = self.model.generate_content(full_prompt)
+            # Generate response using new client API
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=full_prompt
+            )
             
             # Clean response
             cleaned_response = response.text.strip()
@@ -281,3 +286,4 @@ Response:
                 f"I apologize, but I encountered an issue processing your request. "
                 f"Please try rephrasing your question or contact your healthcare provider if urgent."
             )
+

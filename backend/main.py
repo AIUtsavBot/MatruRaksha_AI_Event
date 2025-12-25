@@ -62,10 +62,11 @@ except Exception as e:
     supabase = None
 
 # ==================== GEMINI AI INITIALIZATION ====================
+gemini_client = None
 try:
-    import google.generativeai as genai
+    from google import genai
     if GEMINI_API_KEY:
-        genai.configure(api_key=GEMINI_API_KEY)
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
         GEMINI_AVAILABLE = True
         logger.info("✅ Gemini AI initialized")
     else:
@@ -73,7 +74,7 @@ try:
         logger.warning("⚠️  Gemini API key not set")
 except ImportError as e:
     logger.warning(f"⚠️  Gemini not available: {e}")
-    logger.warning("⚠️  Install with: pip install google-generativeai")
+    logger.warning("⚠️  Install with: pip install google-genai")
     GEMINI_AVAILABLE = False
 
 # ==================== AI AGENTS IMPORT ====================
@@ -611,21 +612,13 @@ Analyze the medical report and extract the following information in a structured
 Provide ONLY the JSON output, no additional text.
 """
         
-        # Try different model names (API versions vary)
-        model_names = ['gemini-2.5-flash']
-        model = None
+        # Use the global gemini_client for API calls
+        model_name = 'gemini-2.5-flash'
         
-        for model_name in model_names:
-            try:
-                model = genai.GenerativeModel(model_name)
-                logger.info(f"✅ Using Gemini model: {model_name}")
-                break
-            except Exception as e:
-                logger.warning(f"⚠️  Model {model_name} not available: {e}")
-                continue
+        if not gemini_client:
+            raise Exception("Gemini client not initialized")
         
-        if not model:
-            raise Exception("No Gemini models available")
+        logger.info(f"✅ Using Gemini model: {model_name}")
         
         # If it's an image, we can pass it directly to Gemini
         if file_type.startswith('image/'):
@@ -639,23 +632,30 @@ Provide ONLY the JSON output, no additional text.
                 import io
                 image = PIL.Image.open(io.BytesIO(response.content))
                 
-                # Generate response with image
-                response = model.generate_content([prompt, image])
-                ai_response = response.text
+                # Generate response with image using new client API
+                result = gemini_client.models.generate_content(
+                    model=model_name,
+                    contents=[prompt, image]
+                )
+                ai_response = result.text
                 
             except Exception as img_error:
                 logger.error(f"Error processing image: {img_error}")
                 # Fallback to text-only analysis
-                response = model.generate_content(prompt + f"\n\nNote: Could not load image from URL: {file_url}")
-                ai_response = response.text
+                result = gemini_client.models.generate_content(
+                    model=model_name,
+                    contents=prompt + f"\n\nNote: Could not load image from URL: {file_url}"
+                )
+                ai_response = result.text
         else:
             # For PDFs and other documents, use text-only analysis
             # Note: For full PDF parsing, you'd need to extract text first
-            response = model.generate_content(
-                prompt + f"\n\nDocument URL: {file_url}\nFile Type: {file_type}\n\n"
+            result = gemini_client.models.generate_content(
+                model=model_name,
+                contents=prompt + f"\n\nDocument URL: {file_url}\nFile Type: {file_type}\n\n"
                 "Note: Please provide a general analysis based on typical maternal health reports."
             )
-            ai_response = response.text
+            ai_response = result.text
         
         logger.info(f"✅ Gemini response received: {len(ai_response)} characters")
         

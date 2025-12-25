@@ -488,8 +488,8 @@ async def upload_certification(file: UploadFile = File(...), email: str = Form(.
         safe_email = email.replace('@', '_').replace(':', '_')
         path = f"certifications/{safe_email}_{int(__import__('time').time())}_{file.filename}"
         resp = supabase_admin.storage.from_("certifications").upload(path, content, {
-            "contentType": file.content_type or "application/octet-stream",
-            "upsert": True
+            "content-type": file.content_type or "application/octet-stream",
+            "x-upsert": "true"
         })
         pub = supabase_admin.storage.from_("certifications").get_public_url(path)
         return {"success": True, "path": path, "public_url": pub}

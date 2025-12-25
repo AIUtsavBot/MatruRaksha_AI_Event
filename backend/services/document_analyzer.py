@@ -11,26 +11,28 @@ from typing import Dict, List, Optional
 from PIL import Image
 import PyPDF2
 from pdf2image import convert_from_bytes
-import google.generativeai as genai
+from google import genai
 import json
 
 logger = logging.getLogger(__name__)
 
 # Configure Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+gemini_client = None
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 
 class DocumentAnalyzer:
     """Analyzes medical documents (images and PDFs) using Gemini"""
     
     def __init__(self):
-        if not GEMINI_API_KEY:
+        if not GEMINI_API_KEY or not gemini_client:
             logger.warning("⚠️  GEMINI_API_KEY not set - document analysis will not work")
-            self.model = None
+            self.client = None
         else:
-            self.model = genai.GenerativeModel('gemini-2.5-flash')
+            self.client = gemini_client
+            self.model_name = 'gemini-2.5-flash'
             logger.info("✅ Gemini model initialized")
     
     async def analyze_document(self, file_bytes: bytes, filename: str, mother_id: str) -> Dict:
@@ -38,7 +40,7 @@ class DocumentAnalyzer:
         Main entry point for document analysis
         Handles both images and PDFs
         """
-        if not self.model:
+        if not self.client:
             return {
                 "success": False,
                 "error": "Gemini API not configured. Please set GEMINI_API_KEY in .env file"
@@ -168,8 +170,11 @@ IMPORTANT:
 - Be thorough - look for ALL health metrics
 """
             
-            # Call Gemini Vision
-            response = self.model.generate_content([prompt, image])
+            # Call Gemini Vision using new client API
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=[prompt, image]
+            )
             result_text = response.text
             
             logger.info(f"Gemini response received: {len(result_text)} characters")
@@ -238,7 +243,10 @@ Return in this EXACT JSON format:
 
 Return ONLY valid JSON."""
             
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
             result_text = response.text
             
             # Clean and parse
@@ -267,7 +275,7 @@ Return ONLY valid JSON."""
 
 
     async def analyze_and_update_history(self, file: Dict[str, Any], mother_id: Any) -> Dict[str, Any]:
-        if not self.model:
+        if not self.client:
             return {"success": False, "error": "AI not available"}
         try:
             fb = file.get('bytes')
@@ -284,7 +292,10 @@ Return ONLY valid JSON."""
                 "Focus on changes and trends."
             )
             payload = [prompt, f"OLD:\n{old_toon}", f"NEW:\n{analysis.get('analysis_summary','')}"]
-            resp = self.model.generate_content(payload)
+            resp = self.client.models.generate_content(
+                model=self.model_name,
+                contents=payload
+            )
             txt = resp.text.strip()
             if "```json" in txt:
                 txt = txt.split("```json")[1].split("```")[0].strip()

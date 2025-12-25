@@ -86,7 +86,7 @@ def check_dependencies():
         "uvicorn": "ASGI server",
         "supabase": "Supabase client",
         "telegram": "Telegram bot library",
-        "google.generativeai": "Gemini AI (optional)",
+        "google.genai": "Gemini AI (optional)",
         "dotenv": "Environment variables",
         "pydantic": "Data validation"
     }
@@ -100,8 +100,8 @@ def check_dependencies():
                 import telegram
             elif package == "dotenv":
                 from dotenv import load_dotenv
-            elif package == "google.generativeai":
-                import google.generativeai as genai
+            elif package == "google.genai":
+                from google import genai
             else:
                 __import__(package)
             
@@ -109,8 +109,8 @@ def check_dependencies():
             checks_passed += 1
         except ImportError:
             print_check(f"{package} - {description}", False)
-            if package == "google.generativeai":
-                print_warning(f"   Install with: pip install google-generativeai")
+            if package == "google.genai":
+                print_warning(f"   Install with: pip install google-genai")
             else:
                 print_warning(f"   Install with: pip install {package}")
     
@@ -206,7 +206,7 @@ def check_gemini_api():
     print("="*60)
     
     try:
-        import google.generativeai as genai
+        from google import genai
         load_dotenv()
         
         api_key = os.getenv("GEMINI_API_KEY")
@@ -217,36 +217,29 @@ def check_gemini_api():
             print_info("   Get key from: https://makersuite.google.com/app/apikey")
             return 0, 1
         
-        # Try to configure and test
-        genai.configure(api_key=api_key)
+        # Create client and test
+        client = genai.Client(api_key=api_key)
         
-        # Try different model names (API versions change)
-        model_names = ['gemini-2.5-flash']
-        success = False
-        
-        for model_name in model_names:
-            try:
-                model = genai.GenerativeModel(model_name)
-                response = model.generate_content("Hello")
-                
-                if response and response.text:
-                    print_check("Gemini API is working", True)
-                    print(f"   🤖 Model: {model_name}")
-                    success = True
-                    break
-            except Exception as model_error:
-                continue
-        
-        if success:
-            return 1, 1
-        else:
+        # Try model
+        model_name = 'gemini-2.5-flash'
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents="Hello"
+            )
+            
+            if response and response.text:
+                print_check("Gemini API is working", True)
+                print(f"   🤖 Model: {model_name}")
+                return 1, 1
+        except Exception as model_error:
             print_check("Gemini API is working", False)
-            print_warning("   Try 'gemini-pro' or 'gemini-1.5-pro' model instead")
+            print_warning(f"   Model error: {str(model_error)[:100]}")
             return 0, 1
             
     except ImportError:
         print_check("Gemini library installed", False)
-        print_warning("   Install with: pip install google-generativeai")
+        print_warning("   Install with: pip install google-genai")
         return 0, 1
     except Exception as e:
         print_check("Gemini API is working", False)
