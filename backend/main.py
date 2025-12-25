@@ -392,7 +392,12 @@ if auth_router:
 # ==================== CORS SETUP ====================
 # Configure CORS to explicitly allow the frontend origin
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").strip()
-ALLOWED_ORIGINS = [FRONTEND_URL, "http://127.0.0.1:5173"]
+ALLOWED_ORIGINS = [
+    FRONTEND_URL,
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -1168,6 +1173,110 @@ def root():
         "gemini_ai": "🤖 Active" if GEMINI_AVAILABLE else "❌ Not Available",
         "ai_agents": "🤖 Active" if AGENTS_AVAILABLE else "❌ Not Loaded"
     }
+
+
+# ==================== CASE DISCUSSION ENDPOINTS ====================
+
+class CaseDiscussionMessage(BaseModel):
+    mother_id: str
+    sender_role: str  # 'DOCTOR' or 'ASHA'
+    sender_name: str
+    message: str
+    send_to_telegram: bool = True  # Whether to also send to patient's Telegram
+
+@app.post("/case-discussions/send")
+async def send_case_discussion(msg: CaseDiscussionMessage):
+    """
+    Send a case discussion message:
+    1. Store in case_discussions table
+    2. Optionally relay to patient's Telegram
+    """
+    try:
+        if not supabase:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Supabase not connected"
+            )
+        
+        logger.info(f"💬 Case discussion from {msg.sender_role} for mother {msg.mother_id}")
+        
+        # Store in case_discussions table
+        insert_result = supabase.table("case_discussions").insert({
+            "mother_id": msg.mother_id,
+            "sender_role": msg.sender_role,
+            "sender_name": msg.sender_name,
+            "message": msg.message,
+        }).execute()
+        
+        if not insert_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to save case discussion"
+            )
+        
+        discussion_id = insert_result.data[0].get("id")
+        telegram_sent = False
+        telegram_error = None
+        
+        # Send to patient's Telegram if requested
+        if msg.send_to_telegram:
+            try:
+                # Get mother's telegram_chat_id
+                mother_result = supabase.table("mothers").select("name, telegram_chat_id").eq("id", msg.mother_id).execute()
+                
+                if mother_result.data and mother_result.data[0].get("telegram_chat_id"):
+                    mother_data = mother_result.data[0]
+                    chat_id = mother_data["telegram_chat_id"]
+                    mother_name = mother_data.get("name", "Patient")
+                    
+                    # Import telegram service
+                    from services.telegram_service import telegram_service
+                    
+                    # Format message for Telegram
+                    role_emoji = "👨‍⚕️" if msg.sender_role == "DOCTOR" else "👩‍⚕️"
+                    role_label = "Doctor" if msg.sender_role == "DOCTOR" else "ASHA Worker"
+                    
+                    telegram_message = (
+                        f"{role_emoji} <b>Message from your {role_label}</b>\n\n"
+                        f"<b>From:</b> {msg.sender_name}\n\n"
+                        f"📝 {msg.message}\n\n"
+                        f"💬 Reply to this message to respond."
+                    )
+                    
+                    result = telegram_service.send_message(
+                        chat_id=chat_id,
+                        message=telegram_message
+                    )
+                    
+                    if result.get("status") == "sent":
+                        telegram_sent = True
+                        logger.info(f"✅ Message relayed to Telegram for {mother_name}")
+                    else:
+                        telegram_error = result.get("error", "Unknown error")
+                        logger.warning(f"⚠️  Telegram send failed: {telegram_error}")
+                else:
+                    telegram_error = "Mother has no telegram_chat_id"
+                    logger.warning(f"⚠️  No telegram_chat_id for mother {msg.mother_id}")
+                    
+            except Exception as e:
+                telegram_error = str(e)
+                logger.error(f"❌ Telegram notification error: {e}")
+        
+        return {
+            "success": True,
+            "discussion_id": discussion_id,
+            "telegram_sent": telegram_sent,
+            "telegram_error": telegram_error
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error sending case discussion: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to send message: {str(e)}"
+        )
 
 
 # ==================== MAIN ENTRY POINT ====================
