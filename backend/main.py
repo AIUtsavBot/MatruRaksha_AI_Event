@@ -398,6 +398,14 @@ if auth_router:
     except Exception:
         pass
 
+# Mount admin routes
+try:
+    from routes.admin_routes import router as admin_router
+    app.include_router(admin_router)
+    logger.info("✅ Admin routes loaded")
+except ImportError as e:
+    logger.warning(f"⚠️  Admin routes not available: {e}")
+
 # ==================== CORS SETUP ====================
 # Configure CORS to explicitly allow the frontend origin
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").strip()
@@ -406,6 +414,9 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:5174",
     "http://127.0.0.1:5174",
+    # Production URLs
+    "https://matru-raksha-ai-event.vercel.app",
+    "https://matruraksha-ai-event.onrender.com",
 ]
 
 app.add_middleware(
@@ -959,6 +970,7 @@ async def analyze_report(request: DocumentAnalysisRequest, background_tasks: Bac
 
 @app.post("/reports/upload")
 async def upload_report(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     mother_id: str = Form(...),
     uploader_id: Optional[str] = Form(None),
@@ -968,7 +980,7 @@ async def upload_report(
     """
     Upload a medical document/report for a mother.
     Stores file in Supabase Storage and creates a record in medical_reports.
-    Tracks who uploaded the document.
+    Automatically triggers AI analysis after upload.
     """
     try:
         if not supabase:
@@ -978,6 +990,16 @@ async def upload_report(
             )
         
         logger.info(f"📤 Uploading report for mother {mother_id} by {uploader_role}: {uploader_name}")
+        
+        # Fetch mother's data including telegram_chat_id
+        mother_result = supabase.table("mothers").select("*").eq("id", mother_id).execute()
+        telegram_chat_id = None
+        mother_data = None
+        if mother_result.data:
+            mother_data = mother_result.data[0]
+            telegram_chat_id = mother_data.get("telegram_chat_id")
+            if telegram_chat_id:
+                logger.info(f"📱 Found telegram_chat_id for mother: {telegram_chat_id}")
         
         # Read file contents
         file_contents = await file.read()
@@ -1027,17 +1049,15 @@ async def upload_report(
             file_url = supabase.storage.from_("medical-reports").get_public_url(storage_path)
         
         # Insert record into medical_reports table
-        # Valid columns: id, mother_id, telegram_chat_id, file_name, file_type, file_url, file_path,
-        #                uploaded_at, analysis_status, analysis_result, extracted_metrics, analyzed_at,
-        #                error_message, created_at, updated_at
         report_data = {
             "mother_id": mother_id,
+            "telegram_chat_id": telegram_chat_id,
             "file_name": original_filename,
             "file_url": file_url,
             "file_path": storage_path,
             "file_type": content_type,
             "uploaded_at": datetime.now().isoformat(),
-            "analysis_status": "pending",
+            "analysis_status": "processing",  # Start as processing since we'll analyze immediately
         }
         
         result = supabase.table("medical_reports").insert(report_data).execute()
@@ -1051,12 +1071,97 @@ async def upload_report(
         report_id = result.data[0]["id"]
         logger.info(f"✅ Report record created: {report_id}")
         
+        # Trigger AI analysis in background
+        def run_ai_analysis():
+            try:
+                logger.info(f"🤖 Starting AI analysis for report {report_id}...")
+                
+                # Perform Gemini AI analysis
+                analysis_result = analyze_document_with_gemini(
+                    file_url,
+                    content_type,
+                    mother_data
+                )
+                
+                # Update report with analysis results
+                update_data = {
+                    "analysis_status": analysis_result.get("status", "completed"),
+                    "analysis_result": analysis_result,
+                    "analyzed_at": datetime.now().isoformat()
+                }
+                
+                # Extract key metrics if available
+                extracted_data = analysis_result.get("extracted_data", {})
+                if extracted_data:
+                    update_data["extracted_metrics"] = extracted_data
+                
+                # Update medical_reports table
+                supabase.table("medical_reports").update(update_data).eq("id", report_id).execute()
+                
+                logger.info(f"✅ Report analysis completed: {analysis_result.get('status')} - Risk: {analysis_result.get('risk_level', 'N/A')}")
+                
+                # Send Telegram notification if available
+                concerns = analysis_result.get("concerns", [])
+                risk_level = analysis_result.get("risk_level", "normal")
+                
+                if telegram_chat_id:
+                    try:
+                        from services.telegram_service import telegram_service
+                        import html
+                        
+                        # Escape HTML special characters in AI-generated text
+                        def escape_text(text):
+                            if not text:
+                                return ""
+                            return html.escape(str(text))
+                        
+                        concerns_text = "\n".join([f"• {escape_text(c)}" for c in concerns[:3]]) if concerns else "None identified"
+                        recommendations_list = analysis_result.get("recommendations", [])[:3]
+                        recommendations_text = "\n".join([f"• {escape_text(r)}" for r in recommendations_list]) if recommendations_list else ""
+                        
+                        risk_emoji = "🔴" if risk_level == "high" else ("🟡" if risk_level == "moderate" else "🟢")
+                        safe_filename = escape_text(original_filename)
+                        
+                        message = (
+                            f"📄 <b>Document Analysis Complete</b>\n\n"
+                            f"📋 File: {safe_filename}\n"
+                            f"{risk_emoji} Risk Level: <b>{risk_level.upper()}</b>\n\n"
+                        )
+                        
+                        if concerns:
+                            message += f"⚠️ <b>Concerns:</b>\n{concerns_text}\n\n"
+                        
+                        if recommendations_text:
+                            message += f"💡 <b>Recommendations:</b>\n{recommendations_text}\n\n"
+                        
+                        message += "Please consult with your healthcare provider for detailed guidance."
+                        
+                        telegram_service.send_message(
+                            chat_id=telegram_chat_id,
+                            message=message
+                        )
+                        logger.info("✅ Analysis result sent to Telegram")
+                    except Exception as telegram_error:
+                        logger.error(f"⚠️  Telegram notification failed: {telegram_error}")
+                        
+            except Exception as analysis_error:
+                logger.error(f"❌ AI Analysis failed: {analysis_error}", exc_info=True)
+                # Update status to error
+                supabase.table("medical_reports").update({
+                    "analysis_status": "error",
+                    "error_message": str(analysis_error)
+                }).eq("id", report_id).execute()
+        
+        # Add analysis to background tasks
+        background_tasks.add_task(run_ai_analysis)
+        
         return {
             "success": True,
-            "message": "Document uploaded successfully",
+            "message": "Document uploaded successfully. AI analysis started.",
             "report_id": report_id,
             "file_url": file_url,
-            "filename": original_filename
+            "filename": original_filename,
+            "analysis_status": "processing"
         }
     
     except HTTPException:
@@ -1067,6 +1172,7 @@ async def upload_report(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Upload failed: {str(e)}"
         )
+
 
 
 @app.get("/reports/{mother_id}")
@@ -1113,6 +1219,58 @@ def get_reports_by_telegram(telegram_chat_id: str):
         }
     except Exception as e:
         logger.error(f"❌ Error fetching reports: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@app.delete("/reports/{report_id}")
+def delete_report(report_id: str):
+    """Delete a medical report (Doctor only)"""
+    try:
+        if not supabase:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Supabase not connected"
+            )
+        
+        logger.info(f"🗑️ Deleting report: {report_id}")
+        
+        # First, get the report to check if it exists and get file_path
+        report_result = supabase.table("medical_reports").select("*").eq("id", report_id).execute()
+        
+        if not report_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Report with ID {report_id} not found"
+            )
+        
+        report = report_result.data[0]
+        file_path = report.get("file_path")
+        
+        # Try to delete from storage if file_path exists
+        if file_path and not file_path.startswith("data:"):
+            try:
+                supabase.storage.from_("medical-reports").remove([file_path])
+                logger.info(f"✅ File removed from storage: {file_path}")
+            except Exception as storage_error:
+                logger.warning(f"⚠️ Could not delete file from storage: {storage_error}")
+        
+        # Delete from database
+        delete_result = supabase.table("medical_reports").delete().eq("id", report_id).execute()
+        
+        logger.info(f"✅ Report deleted: {report_id}")
+        
+        return {
+            "success": True,
+            "message": "Report deleted successfully",
+            "report_id": report_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error deleting report: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -1419,5 +1577,5 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=8000,
-        reload=False
+        reload=True
     )
