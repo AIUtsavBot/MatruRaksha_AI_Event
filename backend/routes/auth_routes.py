@@ -499,10 +499,14 @@ async def get_pending_users(current_user: dict = Depends(require_admin)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class AssignRoleRequest(BaseModel):
+    role: str
+
 @router.post("/pending-users/{user_id}/assign-role")
-async def assign_role_to_pending_user(user_id: str, role: str, current_user: dict = Depends(require_admin)):
+async def assign_role_to_pending_user(user_id: str, body: AssignRoleRequest, current_user: dict = Depends(require_admin)):
     """Assign a role to a pending user"""
     try:
+        role = body.role
         if role not in ["ADMIN", "DOCTOR", "ASHA_WORKER"]:
             raise HTTPException(status_code=400, detail="Invalid role")
         
@@ -560,10 +564,14 @@ async def approve_role_request(request_id: int, current_user: dict = Depends(req
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class RejectRoleRequest(BaseModel):
+    reason: Optional[str] = None
+
 @router.post("/role-requests/{request_id}/reject")
-async def reject_role_request(request_id: int, reason: str = None, current_user: dict = Depends(require_admin)):
+async def reject_role_request(request_id: int, body: RejectRoleRequest = None, current_user: dict = Depends(require_admin)):
     """Reject a registration request"""
     try:
+        reason = body.reason if body else None
         await auth_service.reject_registration_request(request_id, reviewer_id=current_user["id"], note=reason)
         return {"success": True, "message": "Request rejected"}
     except Exception as e:
