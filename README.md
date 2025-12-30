@@ -111,46 +111,362 @@ See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 ## 🏗️ Architecture
 
-```
-┌─────────────────────────────────────────────────────┐
-│                  MatruRakshaAI                      │
-└─────────────────────────────────────────────────────┘
-                         │
-        ┌────────────────┼────────────────┐
-        │                │                │
-   ┌────▼────┐     ┌────▼────┐     ┌────▼────┐
-   │ Telegram│     │ Backend │     │   Web   │
-   │   Bot   │◄────┤ FastAPI │────►│Dashboard│
-   └─────────┘     └────┬────┘     └─────────┘
-                        │
-              ┌─────────┼─────────┐
-              │         │         │
-        ┌─────▼───┐ ┌──▼──┐ ┌───▼────┐
-        │ Supabase│ │Agent│ │Schedule│
-        │   DB    │ │ AI  │ │  Jobs  │
-        └─────────┘ └─────┘ └────────┘
+### System Overview
+
+```mermaid
+flowchart TB
+    subgraph Users["👥 Users"]
+        Mother["🤰 Pregnant Mother"]
+        ASHA["👩‍⚕️ ASHA Worker"]
+        Doctor["👨‍⚕️ Doctor"]
+        Admin["👨‍💼 Admin"]
+    end
+
+    subgraph Frontend["🌐 Frontend (React + Vite)"]
+        WebApp["Web Dashboard<br/>:5173"]
+        RiskDash["Risk Dashboard"]
+        DoctorDash["Doctor Dashboard"]
+        ASHAInterface["ASHA Interface"]
+        AdminDash["Admin Dashboard"]
+    end
+
+    subgraph Backend["⚙️ Backend (FastAPI)"]
+        API["REST API<br/>:8000"]
+        Auth["Auth Service"]
+        Cache["In-Memory Cache<br/>(30s TTL)"]
+        Agents["AI Agents"]
+        Scheduler["Task Scheduler"]
+    end
+
+    subgraph External["🔗 External Services"]
+        Telegram["Telegram Bot"]
+        Gemini["Google Gemini AI"]
+        Resend["Resend Email"]
+    end
+
+    subgraph Database["🗄️ Supabase"]
+        PostgreSQL["PostgreSQL"]
+        SupaAuth["Supabase Auth"]
+        Storage["File Storage"]
+    end
+
+    Mother --> Telegram
+    Mother --> WebApp
+    ASHA --> ASHAInterface
+    Doctor --> DoctorDash
+    Admin --> AdminDash
+
+    WebApp --> API
+    Telegram --> API
+    API --> Cache
+    Cache --> PostgreSQL
+    API --> Auth
+    Auth --> SupaAuth
+    API --> Agents
+    Agents --> Gemini
+    API --> Resend
+    Scheduler --> API
 ```
 
-### **Agent Orchestration**
+### Frontend Architecture
 
+```mermaid
+flowchart LR
+    subgraph Pages["📄 Pages"]
+        Home["Home"]
+        Login["Login/Signup"]
+        RiskDash["RiskDashboard"]
+        DoctorDash["DoctorDashboard"]
+        ASHAInt["ASHAInterface"]
+        AdminDash["AdminDashboard"]
+        AdminApproval["AdminApprovals"]
+    end
+
+    subgraph Components["🧩 Components"]
+        Navbar["Navbar"]
+        PatientCard["PatientCard"]
+        RiskChart["RiskChart"]
+        CaseChat["CaseChat"]
+        ProtectedRoute["ProtectedRoute"]
+    end
+
+    subgraph Services["🔌 Services"]
+        API["api.js<br/>(Axios)"]
+        AuthService["auth.js<br/>(Supabase)"]
+    end
+
+    subgraph Context["📦 Context"]
+        AuthContext["AuthContext<br/>(User State)"]
+    end
+
+    Pages --> Components
+    Pages --> Services
+    Components --> Services
+    Services --> AuthContext
+    ProtectedRoute --> AuthContext
 ```
-┌──────────────────────────────────────────┐
-│         Agent Orchestrator               │
-└────────────┬─────────────────────────────┘
-             │
-    ┌────────┼────────┬────────┬────────┐
-    │        │        │        │        │
-┌───▼──┐ ┌──▼──┐ ┌───▼──┐ ┌───▼──┐ ┌──▼──┐
-│ Risk │ │Care │ │Nutr. │ │ Med. │ │ASHA │
-│Agent │ │Agent│ │Agent │ │Agent │ │Agent│
-└──────┘ └─────┘ └──────┘ └──────┘ └─────┘
-    │        │        │        │        │
-    └────────┴────────┴────────┴────────┘
-                     │
-            ┌────────▼────────┐
-            │ Emergency Agent │
-            └─────────────────┘
+
+### Backend Architecture
+
+```mermaid
+flowchart TB
+    subgraph Entrypoints["🚀 Entrypoints"]
+        MainPy["main.py<br/>(FastAPI App)"]
+        TelegramBot["telegram_bot.py"]
+        SchedulerPy["scheduler.py"]
+    end
+
+    subgraph Routes["🛣️ API Routes"]
+        AuthRoutes["/auth/*<br/>Authentication"]
+        AdminRoutes["/admin/*<br/>Admin Management"]
+        MotherRoutes["/mothers/*<br/>Mother CRUD"]
+        RiskRoutes["/risk/*<br/>Risk Assessment"]
+        AnalyticsRoutes["/analytics/*<br/>Dashboard Data"]
+        CombinedRoutes["/dashboard/full<br/>/admin/full<br/>(Optimized)"]
+    end
+
+    subgraph Services["⚡ Services"]
+        AuthService["auth_service.py"]
+        CacheService["cache_service.py<br/>(In-Memory TTL)"]
+        EmailService["email_service.py<br/>(Resend)"]
+        DocAnalyzer["document_analyzer.py<br/>(Gemini AI)"]
+        TelegramService["telegram_service.py"]
+    end
+
+    subgraph Agents["🤖 AI Agents"]
+        Orchestrator["Orchestrator"]
+        RiskAgent["Risk Agent"]
+        CareAgent["Care Agent"]
+        NutritionAgent["Nutrition Agent"]
+        MedicationAgent["Medication Agent"]
+        EmergencyAgent["Emergency Agent"]
+        ASHAAgent["ASHA Agent"]
+    end
+
+    subgraph Middleware["🔒 Middleware"]
+        AuthMiddleware["JWT Verification"]
+        RoleCheck["Role-Based Access"]
+    end
+
+    MainPy --> Routes
+    Routes --> Middleware
+    Middleware --> Services
+    Services --> Agents
+    Orchestrator --> RiskAgent
+    Orchestrator --> CareAgent
+    Orchestrator --> NutritionAgent
+    Orchestrator --> MedicationAgent
+    Orchestrator --> EmergencyAgent
+    Orchestrator --> ASHAAgent
 ```
+
+### Database Schema
+
+```mermaid
+erDiagram
+    USER_PROFILES ||--o{ MOTHERS : "manages"
+    USER_PROFILES ||--o| DOCTORS : "is"
+    USER_PROFILES ||--o| ASHA_WORKERS : "is"
+    DOCTORS ||--o{ MOTHERS : "assigned_to"
+    ASHA_WORKERS ||--o{ MOTHERS : "assigned_to"
+    MOTHERS ||--o{ RISK_ASSESSMENTS : "has"
+    MOTHERS ||--o{ MEDICAL_REPORTS : "has"
+    MOTHERS ||--o{ VISITS : "has"
+    MOTHERS ||--o{ CASE_DISCUSSIONS : "has"
+
+    USER_PROFILES {
+        uuid id PK
+        string email
+        string full_name
+        enum role "ADMIN|DOCTOR|ASHA_WORKER"
+        string phone
+        timestamp created_at
+    }
+
+    DOCTORS {
+        int id PK
+        uuid user_id FK
+        string name
+        string email
+        string phone
+        string degree_cert_url
+        boolean is_active
+    }
+
+    ASHA_WORKERS {
+        int id PK
+        uuid user_id FK
+        string name
+        string email
+        string phone
+        string assigned_area
+        boolean is_active
+    }
+
+    MOTHERS {
+        uuid id PK
+        string name
+        string phone
+        int age
+        float bmi
+        string location
+        int doctor_id FK
+        int asha_worker_id FK
+        string telegram_chat_id
+    }
+
+    RISK_ASSESSMENTS {
+        uuid id PK
+        uuid mother_id FK
+        int systolic_bp
+        int diastolic_bp
+        float hemoglobin
+        string risk_level "HIGH|MODERATE|LOW"
+        int risk_score
+        timestamp created_at
+    }
+
+    REGISTRATION_REQUESTS {
+        uuid id PK
+        string email
+        string full_name
+        enum role_requested
+        string degree_cert_url
+        enum status "PENDING|APPROVED|REJECTED"
+    }
+```
+
+### User Authentication Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant B as Backend
+    participant S as Supabase Auth
+    participant A as Admin
+
+    Note over U,A: Google OAuth Registration Flow
+    U->>F: Click "Sign in with Google"
+    F->>S: Redirect to Google OAuth
+    S-->>F: Return with auth token
+    F->>F: Show role selection (Doctor/ASHA)
+    
+    alt Doctor Selected
+        F->>F: Show certificate upload form
+        U->>F: Upload medical certificate
+        F->>B: POST /auth/upload-cert
+        B->>S: Store file in Storage
+    end
+    
+    F->>B: POST /auth/role-requests
+    B->>B: Save to registration_requests (PENDING)
+    F->>U: Show "Pending Approval" screen
+    
+    Note over A,B: Admin Approval
+    A->>F: View /admin/approvals
+    F->>B: GET /auth/role-requests
+    A->>F: Click Approve
+    F->>B: POST /auth/role-requests/{id}/approve
+    B->>B: Create user_profiles + doctors/asha_workers entry
+    B-->>U: User can now access dashboard
+```
+
+### Data Flow - Risk Assessment
+
+```mermaid
+sequenceDiagram
+    participant M as Mother/ASHA
+    participant T as Telegram/Web
+    participant B as Backend API
+    participant C as Cache
+    participant AI as AI Agents
+    participant DB as Database
+    participant N as Notifications
+
+    M->>T: Submit health data (BP, symptoms)
+    T->>B: POST /risk/assess
+    B->>AI: Analyze with Risk Agent
+    AI->>AI: Calculate risk score
+    AI-->>B: Return risk_level, recommendations
+    B->>DB: Save risk_assessment
+    B->>C: Invalidate dashboard cache
+    
+    alt HIGH Risk Detected
+        B->>AI: Activate Emergency Agent
+        AI-->>B: Emergency protocol
+        B->>N: Send alerts (Email + Telegram)
+        N-->>M: Emergency notification
+        N-->>ASHA: ASHA worker alert
+        N-->>Doctor: Doctor notification
+    end
+    
+    B-->>T: Return assessment result
+    T-->>M: Display risk status & recommendations
+```
+
+### Performance Optimization Flow
+
+```mermaid
+flowchart LR
+    subgraph Before["❌ Before (Slow)"]
+        B1["Frontend"] --> B2["API Call 1"]
+        B1 --> B3["API Call 2"]
+        B1 --> B4["API Call 3"]
+        B1 --> B5["API Call 4"]
+        B2 --> B6["DB Query"]
+        B3 --> B7["DB Query"]
+        B4 --> B8["DB Query"]
+        B5 --> B9["DB Query"]
+    end
+
+    subgraph After["✅ After (3x Faster)"]
+        A1["Frontend"] --> A2["Combined API Call<br/>/dashboard/full"]
+        A2 --> A3["Check Cache"]
+        A3 -->|Hit| A4["Return Cached Data<br/>(Instant)"]
+        A3 -->|Miss| A5["Single Optimized Query"]
+        A5 --> A6["Cache for 30s"]
+        A6 --> A4
+    end
+```
+
+### AI Agent Orchestration
+
+```mermaid
+flowchart TB
+    Input["User Query / Health Data"]
+    
+    subgraph Orchestrator["🎯 Agent Orchestrator"]
+        Classify["Intent Classification<br/>(Gemini AI)"]
+    end
+    
+    subgraph Agents["🤖 Specialized Agents"]
+        Risk["Risk Agent<br/>• BP Analysis<br/>• Risk Scoring<br/>• Recommendations"]
+        Care["Care Agent<br/>• Daily Tasks<br/>• Exercise Plans<br/>• Checkup Schedule"]
+        Nutrition["Nutrition Agent<br/>• Meal Plans<br/>• Supplements<br/>• Anemia Care"]
+        Medication["Medication Agent<br/>• Reminders<br/>• Interactions<br/>• Compliance"]
+        Emergency["Emergency Agent<br/>• Protocol Activation<br/>• Alert System<br/>• Immediate Actions"]
+        ASHA["ASHA Agent<br/>• Visit Scheduling<br/>• Checklists<br/>• Coordination"]
+    end
+    
+    Output["Response to User"]
+    
+    Input --> Classify
+    Classify -->|Health Query| Risk
+    Classify -->|Care Question| Care
+    Classify -->|Food/Diet| Nutrition
+    Classify -->|Medicine| Medication
+    Classify -->|Emergency| Emergency
+    Classify -->|Appointment| ASHA
+    
+    Risk --> Output
+    Care --> Output
+    Nutrition --> Output
+    Medication --> Output
+    Emergency --> Output
+    ASHA --> Output
+```
+
 
 ---
 
