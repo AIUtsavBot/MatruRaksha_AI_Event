@@ -40,6 +40,10 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# Backend URL for Telegram webhook (e.g., https://your-app.onrender.com)
+BACKEND_URL = os.getenv("BACKEND_URL", "").strip()
+# Use webhooks instead of polling for efficiency (only triggers on messages)
+USE_TELEGRAM_WEBHOOK = os.getenv("USE_TELEGRAM_WEBHOOK", "true").lower() == "true"
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     logger.warning("⚠️  Supabase credentials not found in .env")
@@ -284,24 +288,60 @@ def run_telegram_bot():
         import time
         time.sleep(2)
         
-        # Start polling with conflict handling
-        logger.info("🚀 Starting Telegram polling...")
-        bot_running = True
+        # Use webhooks if BACKEND_URL is set (more efficient - only triggers on messages)
+        if USE_TELEGRAM_WEBHOOK and BACKEND_URL:
+            webhook_url = f"{BACKEND_URL}/telegram/webhook/{TELEGRAM_BOT_TOKEN}"
+            logger.info(f"🔗 Setting up Telegram webhook: {BACKEND_URL}/telegram/webhook/***")
+            
+            try:
+                # Set webhook with Telegram
+                loop.run_until_complete(application.bot.set_webhook(
+                    url=webhook_url,
+                    allowed_updates=["message", "callback_query", "inline_query"],
+                    drop_pending_updates=True
+                ))
+                logger.info("✅ Telegram webhook set successfully")
+                logger.info("🪝 Bot will receive updates via webhook (no polling)")
+                
+                # Initialize and start the application for webhook mode
+                loop.run_until_complete(application.start())
+                bot_running = True
+                
+                logger.info("🤖 MatruRaksha Telegram Bot is ACTIVE (webhook mode)")
+                
+                # In webhook mode, we don't run_forever - FastAPI handles incoming requests
+                # Keep the application running but don't poll
+                while bot_running:
+                    time.sleep(60)  # Just keep thread alive, no polling
+                    
+            except Exception as webhook_error:
+                logger.error(f"❌ Webhook setup failed: {webhook_error}")
+                logger.info("⚠️ Falling back to polling mode...")
+                # Fall through to polling
+        else:
+            if not BACKEND_URL:
+                logger.warning("⚠️ BACKEND_URL not set - using polling (set BACKEND_URL for webhook mode)")
         
-        loop.run_until_complete(application.start())
-        loop.run_until_complete(application.updater.start_polling(
-            drop_pending_updates=True,
-            allowed_updates=["message", "callback_query", "inline_query"]
-        ))
-        
-        logger.info("✅ Telegram polling started")
-        logger.info("🤖 MatruRaksha Telegram Bot is ACTIVE")
-        
-        # Keep running
-        loop.run_forever()
+        # Fallback: Start polling if webhooks not available
+        if not bot_running:
+            logger.info("🚀 Starting Telegram polling...")
+            bot_running = True
+            
+            loop.run_until_complete(application.start())
+            loop.run_until_complete(application.updater.start_polling(
+                drop_pending_updates=True,
+                allowed_updates=["message", "callback_query", "inline_query"],
+                poll_interval=2.0  # Poll every 2 seconds instead of every second
+            ))
+            
+            logger.info("✅ Telegram polling started")
+            logger.info("🤖 MatruRaksha Telegram Bot is ACTIVE (polling mode)")
+            
+            # Keep running
+            loop.run_forever()
         
     except Exception as e:
-        logger.error(f"❌ Error in Telegram polling: {e}", exc_info=True)
+        logger.error(f"❌ Error in Telegram bot: {e}", exc_info=True)
         bot_running = False
     finally:
         try:
@@ -457,6 +497,43 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ==================== TELEGRAM WEBHOOK ENDPOINT ====================
+# This endpoint receives updates from Telegram instead of polling
+
+@app.post("/telegram/webhook/{token}")
+async def telegram_webhook(token: str, request: Request):
+    """
+    Webhook endpoint for Telegram bot updates.
+    Only triggers when a message is received (no polling!).
+    """
+    global telegram_bot_app
+    
+    # Verify token matches our bot token
+    if token != TELEGRAM_BOT_TOKEN:
+        logger.warning("⚠️ Invalid webhook token received")
+        raise HTTPException(status_code=403, detail="Invalid token")
+    
+    if not telegram_bot_app:
+        logger.error("❌ Telegram bot not initialized")
+        raise HTTPException(status_code=500, detail="Bot not ready")
+    
+    try:
+        # Parse the update from Telegram
+        from telegram import Update
+        
+        update_data = await request.json()
+        update = Update.de_json(update_data, telegram_bot_app.bot)
+        
+        # Process the update asynchronously
+        await telegram_bot_app.process_update(update)
+        
+        return {"ok": True}
+        
+    except Exception as e:
+        logger.error(f"❌ Webhook processing error: {e}")
+        # Still return 200 to prevent Telegram from retrying
+        return {"ok": False, "error": str(e)}
 
 # ==================== FALLBACK AUTH ROUTES (ensure availability) ====================
 try:
