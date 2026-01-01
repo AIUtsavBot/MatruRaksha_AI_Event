@@ -42,6 +42,53 @@ if (supabaseUrl && supabaseAnonKey) {
 
 export { supabase }
 
+// Session caching for instant page loads
+const USER_CACHE_KEY = 'matraraksha_user_cache'
+const LAST_ACTIVITY_KEY = 'matraraksha_last_activity'
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000  // 30 minutes idle timeout
+
+// Cache user for instant reload
+const cacheUser = (user) => {
+  if (user) {
+    localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user))
+    localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString())
+  } else {
+    localStorage.removeItem(USER_CACHE_KEY)
+    localStorage.removeItem(LAST_ACTIVITY_KEY)
+  }
+}
+
+// Get cached user (returns null if expired or not found)
+const getCachedUser = () => {
+  try {
+    const lastActivity = localStorage.getItem(LAST_ACTIVITY_KEY)
+    const cachedUserStr = localStorage.getItem(USER_CACHE_KEY)
+
+    if (!cachedUserStr || !lastActivity) return null
+
+    // Check if idle timeout exceeded
+    const timeSinceActivity = Date.now() - parseInt(lastActivity, 10)
+    if (timeSinceActivity > IDLE_TIMEOUT_MS) {
+      console.log('⏰ Session expired due to inactivity')
+      localStorage.removeItem(USER_CACHE_KEY)
+      localStorage.removeItem(LAST_ACTIVITY_KEY)
+      return null
+    }
+
+    return JSON.parse(cachedUserStr)
+  } catch {
+    return null
+  }
+}
+
+// Update last activity timestamp
+const updateActivity = () => {
+  localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString())
+}
+
+// Export for use in AuthContext
+export { cacheUser, getCachedUser, updateActivity, IDLE_TIMEOUT_MS }
+
 /**
  * Authentication Service
  */

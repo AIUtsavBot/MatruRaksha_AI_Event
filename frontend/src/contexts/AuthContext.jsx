@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
-import authService from '../services/auth'
+import authService, { cacheUser, getCachedUser, updateActivity } from '../services/auth'
 
 const AuthContext = createContext({})
 
@@ -12,47 +12,75 @@ export const useAuth = () => {
 }
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null)
+  // Initialize with cached user for instant page load (no loading spinner)
+  const cachedUser = getCachedUser()
+  const [user, setUser] = useState(cachedUser)
   const [session, setSession] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const userRef = useRef(null)  // Track current user to avoid closure issues
+  // If we have a cached user, don't show loading - page loads instantly
+  const [loading, setLoading] = useState(!cachedUser)
+  const userRef = useRef(cachedUser)
 
-  // Keep ref in sync with state
+  // Keep ref in sync with state and cache user
   useEffect(() => {
     userRef.current = user
+    cacheUser(user)  // Cache to localStorage for instant reload
   }, [user])
+
+  // Track user activity for idle timeout
+  useEffect(() => {
+    const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart']
+    const handleActivity = () => updateActivity()
+
+    activityEvents.forEach(event => {
+      window.addEventListener(event, handleActivity, { passive: true })
+    })
+
+    return () => {
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, handleActivity)
+      })
+    }
+  }, [])
 
   useEffect(() => {
     let mounted = true
 
-    // Check current session on mount - optimized flow
-    const initAuth = async () => {
+    // Verify session in background (don't block page load)
+    const verifySession = async () => {
       try {
-        // Get session - this is the main check needed
         const currentSession = await authService.getSession()
-        console.log('🔐 Initial session check:', currentSession ? 'Found' : 'None')
+        console.log('🔐 Session verify:', currentSession ? 'Valid' : 'None')
 
         if (!mounted) return
         setSession(currentSession)
 
-        // Only fetch user data if session exists (avoid unnecessary call)
+        // If no valid session but we had cached user, clear it (session expired)
+        if (!currentSession?.user && cachedUser) {
+          console.log('⏰ Session expired, clearing user')
+          setUser(null)
+          cacheUser(null)
+          setLoading(false)
+          return
+        }
+
+        // If session exists, refresh user data in background
         if (currentSession?.user) {
-          // Use the session user data directly if possible to avoid extra network call
-          const currentUser = await authService.getCurrentUser()
-          console.log('👤 User loaded:', currentUser?.email, 'Role:', currentUser?.role)
-          if (mounted) {
-            setUser(currentUser)
-            userRef.current = currentUser
+          const freshUser = await authService.getCurrentUser()
+          console.log('👤 User verified:', freshUser?.email, 'Role:', freshUser?.role)
+          if (mounted && freshUser) {
+            setUser(freshUser)
+            updateActivity()
           }
         }
       } catch (error) {
-        console.error('Auth initialization error:', error)
+        console.error('Auth verification error:', error)
+        // On error with cached user, keep showing cached data
       } finally {
         if (mounted) setLoading(false)
       }
     }
 
-    initAuth()
+    verifySession()
 
     // Listen to auth state changes
     const subscription = authService.onAuthStateChange((event, newSession, newUser) => {
@@ -65,6 +93,7 @@ export const AuthProvider = ({ children }) => {
         console.log('👋 User signed out')
         setSession(null)
         setUser(null)
+        cacheUser(null)
         userRef.current = null
         setLoading(false)
         return
@@ -74,7 +103,7 @@ export const AuthProvider = ({ children }) => {
       if (event === 'TOKEN_REFRESHED') {
         console.log('↻ Token refreshed')
         setSession(newSession)
-        // Don't touch user state - keep existing
+        updateActivity()
         return
       }
 
@@ -84,6 +113,7 @@ export const AuthProvider = ({ children }) => {
         setSession(newSession)
         setUser(newUser)
         userRef.current = newUser
+        updateActivity()
       }
 
       setLoading(false)
@@ -113,6 +143,7 @@ export const AuthProvider = ({ children }) => {
       const result = await authService.signIn(email, password)
       setUser(result.user)
       setSession(result.session)
+      updateActivity()
       return result
     } catch (error) {
       throw error
@@ -139,6 +170,7 @@ export const AuthProvider = ({ children }) => {
       await authService.signOut()
       setUser(null)
       setSession(null)
+      cacheUser(null)
     } catch (error) {
       throw error
     } finally {
