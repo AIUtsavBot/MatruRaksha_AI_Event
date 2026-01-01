@@ -272,13 +272,26 @@ def run_telegram_bot():
         # Store globally
         telegram_bot_app = application
         
-        # Start polling
+        # Clear any existing webhook/polling connections before starting
+        logger.info("🔄 Clearing any existing Telegram connections...")
+        try:
+            loop.run_until_complete(application.bot.delete_webhook(drop_pending_updates=True))
+            logger.info("✅ Cleared existing webhook/connections")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not clear webhook: {e}")
+        
+        # Small delay to ensure old connections are released
+        import time
+        time.sleep(2)
+        
+        # Start polling with conflict handling
         logger.info("🚀 Starting Telegram polling...")
         bot_running = True
         
         loop.run_until_complete(application.start())
         loop.run_until_complete(application.updater.start_polling(
-            drop_pending_updates=True
+            drop_pending_updates=True,
+            allowed_updates=["message", "callback_query", "inline_query"]
         ))
         
         logger.info("✅ Telegram polling started")
