@@ -25,8 +25,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Configuration
-API_BASE = "http://localhost:8000"
+# Configuration - use BACKEND_URL for production
+API_BASE = (os.getenv("BACKEND_URL") or os.getenv("API_BASE") or "http://localhost:8000").strip().rstrip('/')
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 SUPABASE_URL = os.getenv("SUPABASE_URL")

@@ -55,7 +55,12 @@ logger = logging.getLogger(__name__)
  AWAITING_LANGUAGE, CONFIRM_REGISTRATION) = range(10)
 
 TELEGRAM_BOT_TOKEN = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
-BACKEND_API_BASE_URL = (os.getenv("BACKEND_API_BASE_URL") or "http://localhost:8000").strip()
+# Use BACKEND_URL for production, fall back to BACKEND_API_BASE_URL, then localhost for dev
+BACKEND_API_BASE_URL = (
+    os.getenv("BACKEND_URL") or 
+    os.getenv("BACKEND_API_BASE_URL") or 
+    "http://localhost:8000"
+).strip().rstrip('/')
 
 # Dashboard & summary configuration
 MAX_TIMELINE_EVENTS = 5
