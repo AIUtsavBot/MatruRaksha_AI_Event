@@ -1,7 +1,4 @@
-// MatruRaksha AI - Authentication Context
-// React context for managing authentication state
-
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import authService from '../services/auth'
 
 const AuthContext = createContext({})
@@ -18,14 +15,24 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const userRef = useRef(null)  // Track current user to avoid closure issues
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    userRef.current = user
+  }, [user])
 
   useEffect(() => {
+    let mounted = true
+
     // Check current session on mount - optimized flow
     const initAuth = async () => {
       try {
         // Get session - this is the main check needed
         const currentSession = await authService.getSession()
         console.log('🔐 Initial session check:', currentSession ? 'Found' : 'None')
+
+        if (!mounted) return
         setSession(currentSession)
 
         // Only fetch user data if session exists (avoid unnecessary call)
@@ -33,12 +40,15 @@ export const AuthProvider = ({ children }) => {
           // Use the session user data directly if possible to avoid extra network call
           const currentUser = await authService.getCurrentUser()
           console.log('👤 User loaded:', currentUser?.email, 'Role:', currentUser?.role)
-          setUser(currentUser)
+          if (mounted) {
+            setUser(currentUser)
+            userRef.current = currentUser
+          }
         }
       } catch (error) {
         console.error('Auth initialization error:', error)
       } finally {
-        setLoading(false)
+        if (mounted) setLoading(false)
       }
     }
 
@@ -48,19 +58,23 @@ export const AuthProvider = ({ children }) => {
     const subscription = authService.onAuthStateChange((event, newSession, newUser) => {
       console.log('🔄 Auth state changed:', event)
 
-      // Ignore TOKEN_REFRESHED events if we already have a user - prevents flicker
-      if (event === 'TOKEN_REFRESHED' && user) {
-        console.log('↻ Token refreshed, keeping existing user')
-        setSession(newSession)
-        return
-      }
+      if (!mounted) return
 
       // Handle sign out
       if (event === 'SIGNED_OUT') {
         console.log('👋 User signed out')
         setSession(null)
         setUser(null)
+        userRef.current = null
         setLoading(false)
+        return
+      }
+
+      // For TOKEN_REFRESHED, just update session but keep user
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('↻ Token refreshed')
+        setSession(newSession)
+        // Don't touch user state - keep existing
         return
       }
 
@@ -69,12 +83,14 @@ export const AuthProvider = ({ children }) => {
         console.log('✅ User authenticated:', newUser?.email)
         setSession(newSession)
         setUser(newUser)
+        userRef.current = newUser
       }
 
       setLoading(false)
     })
 
     return () => {
+      mounted = false
       subscription?.unsubscribe()
     }
   }, [])

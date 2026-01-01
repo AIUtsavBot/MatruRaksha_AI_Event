@@ -216,6 +216,7 @@ class AuthService:
                 # No encrypted password stored, generate temp password
                 user_password = secrets.token_urlsafe(16)
 
+            user_id = None
             try:
                 logger.info(f"Creating user with email: {email}, role: {role}")
                 created = supabase_admin.auth.admin.create_user({
@@ -229,12 +230,34 @@ class AuthService:
                         "assigned_area": assigned_area
                     }
                 })
-                logger.info(f"Create user response: {created}")
+                user_id = created.user.id if getattr(created, "user", None) else None
+                logger.info(f"✅ Created new user: {user_id}")
             except Exception as create_error:
-                logger.error(f"❌ Supabase create_user error: {create_error}")
-                raise Exception(f"Failed to create user: {create_error}")
+                error_msg = str(create_error)
+                # If user already exists (Google OAuth), look them up instead
+                if "already been registered" in error_msg or "already exists" in error_msg.lower():
+                    logger.info(f"⚠️ User already exists, looking up by email: {email}")
+                    try:
+                        # Get user by email from user_profiles table
+                        existing_user = supabase_admin.table("user_profiles").select("id").eq("email", email).execute()
+                        if existing_user.data and len(existing_user.data) > 0:
+                            user_id = existing_user.data[0]["id"]
+                            logger.info(f"✅ Found existing user by profile: {user_id}")
+                        else:
+                            # Try to get from auth.users via admin API
+                            users_response = supabase_admin.auth.admin.list_users()
+                            for u in users_response:
+                                if hasattr(u, 'email') and u.email == email:
+                                    user_id = u.id
+                                    logger.info(f"✅ Found existing user in auth: {user_id}")
+                                    break
+                    except Exception as lookup_error:
+                        logger.error(f"❌ Could not lookup existing user: {lookup_error}")
+                
+                if not user_id:
+                    logger.error(f"❌ Supabase create_user error: {create_error}")
+                    raise Exception(f"Failed to create user: {create_error}")
 
-            user_id = created.user.id if getattr(created, "user", None) else None
             if not user_id:
                 raise Exception("Failed to create user - no user ID returned")
 
