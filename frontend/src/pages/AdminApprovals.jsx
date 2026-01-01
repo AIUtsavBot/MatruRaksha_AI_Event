@@ -17,39 +17,13 @@ export default function AdminApprovals() {
       setLoading(true)
       setError('')
 
-      // Load all types of pending approvals
-      const [reqRes, usersRes, roleReqRes] = await Promise.all([
-        authAPI.listRegisterRequests().catch(() => ({ data: { requests: [] } })),
-        authAPI.listPendingUsers().catch(() => ({ data: { users: [] } })),
-        authAPI.listRoleRequests().catch(() => ({ data: { requests: [] } }))
-      ])
-
+      // Only load role requests (registration_requests table) - single source of truth
+      const roleReqRes = await authAPI.listRoleRequests().catch(() => ({ data: { requests: [] } }))
       const roleReqs = roleReqRes.data?.requests || []
-      const formReqs = reqRes.data?.requests || []
-      const legacyUsers = usersRes.data?.users || []
-
-      // Get emails from role requests (highest priority)
-      const roleReqEmails = new Set(roleReqs.map(r => r.email?.toLowerCase()))
-
-      // Filter legacy users - remove if already in role requests
-      const filteredLegacyUsers = legacyUsers.filter(u =>
-        !roleReqEmails.has(u.email?.toLowerCase())
-      )
-
-      // Get all processed emails
-      const processedEmails = new Set([
-        ...roleReqEmails,
-        ...filteredLegacyUsers.map(u => u.email?.toLowerCase())
-      ])
-
-      // Filter form requests - remove if already in role requests or legacy users
-      const filteredFormReqs = formReqs.filter(r =>
-        !processedEmails.has(r.email?.toLowerCase())
-      )
 
       setRoleRequests(roleReqs)
-      setPendingUsers(filteredLegacyUsers)
-      setRequests(filteredFormReqs)
+      setPendingUsers([])  // Deprecated - legacy users
+      setRequests([])      // Deprecated - form requests
     } catch (e) {
       setError(e.message || 'Failed to load data')
     } finally {

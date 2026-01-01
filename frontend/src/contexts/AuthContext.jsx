@@ -25,12 +25,14 @@ export const AuthProvider = ({ children }) => {
       try {
         // Get session - this is the main check needed
         const currentSession = await authService.getSession()
+        console.log('🔐 Initial session check:', currentSession ? 'Found' : 'None')
         setSession(currentSession)
 
         // Only fetch user data if session exists (avoid unnecessary call)
         if (currentSession?.user) {
           // Use the session user data directly if possible to avoid extra network call
           const currentUser = await authService.getCurrentUser()
+          console.log('👤 User loaded:', currentUser?.email, 'Role:', currentUser?.role)
           setUser(currentUser)
         }
       } catch (error) {
@@ -43,10 +45,32 @@ export const AuthProvider = ({ children }) => {
     initAuth()
 
     // Listen to auth state changes
-    const subscription = authService.onAuthStateChange((event, session, user) => {
-      console.log('Auth state changed:', event)
-      setSession(session)
-      setUser(user)
+    const subscription = authService.onAuthStateChange((event, newSession, newUser) => {
+      console.log('🔄 Auth state changed:', event)
+
+      // Ignore TOKEN_REFRESHED events if we already have a user - prevents flicker
+      if (event === 'TOKEN_REFRESHED' && user) {
+        console.log('↻ Token refreshed, keeping existing user')
+        setSession(newSession)
+        return
+      }
+
+      // Handle sign out
+      if (event === 'SIGNED_OUT') {
+        console.log('👋 User signed out')
+        setSession(null)
+        setUser(null)
+        setLoading(false)
+        return
+      }
+
+      // Handle sign in or initial session
+      if (newSession && newUser) {
+        console.log('✅ User authenticated:', newUser?.email)
+        setSession(newSession)
+        setUser(newUser)
+      }
+
       setLoading(false)
     })
 

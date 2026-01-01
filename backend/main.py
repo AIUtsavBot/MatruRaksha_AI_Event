@@ -1520,6 +1520,65 @@ def get_dashboard_analytics():
         )
 
 
+@app.get("/analytics/asha/{asha_id}")
+def get_asha_analytics(asha_id: int):
+    """Get analytics for a specific ASHA worker"""
+    try:
+        if not supabase:
+            return {
+                "status": "success",
+                "total_mothers": 0,
+                "high_risk_count": 0,
+                "moderate_risk_count": 0,
+                "low_risk_count": 0,
+                "total_assessments": 0
+            }
+        
+        # Get mothers assigned to this ASHA worker
+        mothers_result = supabase.table("mothers").select("id").eq("asha_worker_id", asha_id).execute()
+        mother_ids = [m["id"] for m in (mothers_result.data or [])]
+        total_mothers = len(mother_ids)
+        
+        if not mother_ids:
+            return {
+                "status": "success",
+                "total_mothers": 0,
+                "high_risk_count": 0,
+                "moderate_risk_count": 0,
+                "low_risk_count": 0,
+                "total_assessments": 0
+            }
+        
+        # Get latest risk assessment for each mother
+        assessments_result = supabase.table("risk_assessments").select("mother_id, risk_level").in_("mother_id", mother_ids).order("created_at", desc=True).execute()
+        assessments = assessments_result.data or []
+        
+        # Count unique mothers by their latest risk level
+        latest_risks = {}
+        for a in assessments:
+            if a["mother_id"] not in latest_risks:
+                latest_risks[a["mother_id"]] = a["risk_level"]
+        
+        high_risk = sum(1 for r in latest_risks.values() if r == "HIGH")
+        moderate_risk = sum(1 for r in latest_risks.values() if r == "MODERATE")
+        low_risk = total_mothers - high_risk - moderate_risk  # Remaining are LOW or unassessed
+        
+        return {
+            "status": "success",
+            "total_mothers": total_mothers,
+            "high_risk_count": high_risk,
+            "moderate_risk_count": moderate_risk,
+            "low_risk_count": low_risk,
+            "total_assessments": len(assessments)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error fetching ASHA analytics: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching analytics: {str(e)}"
+        )
+
 @app.get("/dashboard/full")
 def get_full_dashboard():
     """
