@@ -41,7 +41,7 @@ const apiCall = async (method, endpoint, data = null) => {
 
 export default function ASHAInterface() {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   // ASHA worker state
   const [ashaWorkerId, setAshaWorkerId] = useState(null);
@@ -65,8 +65,11 @@ export default function ASHAInterface() {
   const [mainView, setMainView] = useState("mother");
   const [selectedAssessment, setSelectedAssessment] = useState(null);
 
-  const [assessmentForm, setAssessmentForm] = useState({
-    mother_id: "",
+  // Active tab management
+  const [activeTab, setActiveTab] = useState("mothers"); // 'mothers', 'analytics', 'register'
+
+  // Risk Assessment form state
+  const [riskFormData, setRiskFormData] = useState({
     systolic_bp: "",
     diastolic_bp: "",
     heart_rate: "",
@@ -82,11 +85,19 @@ export default function ASHAInterface() {
   const [riskResult, setRiskResult] = useState(null);
 
   // Auto-detect ASHA worker by user_profile_id from asha_workers table
+  // Wait for authLoading to be false before starting detection
   useEffect(() => {
     let isMounted = true;
     let timeoutId = null;
+    let safetyTimeoutId = null;
 
     const autoDetectAsha = async () => {
+      // Wait for auth to finish loading
+      if (authLoading) {
+        console.log("⏳ Waiting for auth to finish loading...");
+        return;
+      }
+
       if (!user?.id && !user?.email) {
         setLoadingProfile(false);
         return;
@@ -99,6 +110,15 @@ export default function ASHAInterface() {
           // Don't set loadingProfile to false - let the query complete
         }
       }, 8000); // 8 second warning (doesn't stop the query)
+
+      // Safety timeout - stop loading after 30 seconds no matter what
+      safetyTimeoutId = setTimeout(() => {
+        if (isMounted && loadingProfile) {
+          console.log('⚠️ ASHA profile detection safety timeout - stopping');
+          setLoadingProfile(false);
+          setError("Profile detection took too long. Please reload the page.");
+        }
+      }, 30000);
 
       try {
         // First try: Look up ASHA worker by user_profile_id (auth user ID)
@@ -207,29 +227,25 @@ export default function ASHAInterface() {
       } finally {
         if (isMounted) {
           clearTimeout(timeoutId);
+          clearTimeout(safetyTimeoutId);
           setLoadingProfile(false);
         }
       }
     };
 
-    if (user) {
+    if (!authLoading && user) {
       autoDetectAsha();
-    } else {
-      // If no user yet, wait a bit and check again, but don't block forever
-      const waitForUser = setTimeout(() => {
-        if (isMounted && !user) {
-          console.log('⏱️ No user available after waiting');
-          setLoadingProfile(false);
-        }
-      }, 3000); // 3 seconds to wait for user
-      return () => clearTimeout(waitForUser);
+    } else if (!authLoading && !user) {
+      // Auth finished but no user
+      setLoadingProfile(false);
     }
 
     return () => {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
+      if (safetyTimeoutId) clearTimeout(safetyTimeoutId);
     };
-  }, [user]);
+  }, [user, authLoading]);
 
   // Load data when ASHA ID is available
   useEffect(() => {

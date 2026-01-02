@@ -44,7 +44,7 @@ const apiCall = async (method, endpoint, data = null) => {
 
 export default function DoctorDashboard() {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [doctorId, setDoctorId] = useState(null);
   const [doctorInfo, setDoctorInfo] = useState(null);
@@ -68,23 +68,39 @@ export default function DoctorDashboard() {
   const [successMsg, setSuccessMsg] = useState("");
 
   // Auto-detect doctor by user_profile_id from doctors table
+  // Wait for authLoading to be false before starting detection
   useEffect(() => {
     let isMounted = true;
     let timeoutId = null;
+    let safetyTimeoutId = null;
 
     const autoDetectDoctor = async () => {
+      // Wait for auth to finish loading
+      if (authLoading) {
+        console.log("⏳ Waiting for auth to finish loading...");
+        return;
+      }
+
       if (!user?.id && !user?.email) {
         setLoadingProfile(false);
         return;
       }
 
-      // Log warning if query takes too long, but don't stop the query
+      // Log warning if query takes too long
       timeoutId = setTimeout(() => {
         if (isMounted && loadingProfile) {
           console.log('⏱️ Doctor profile detection taking longer than expected...');
-          // Don't set loadingProfile to false - let the query complete
         }
-      }, 8000); // 8 second warning (doesn't stop the query)
+      }, 8000);
+
+      // Safety timeout - stop loading after 30 seconds no matter what
+      safetyTimeoutId = setTimeout(() => {
+        if (isMounted && loadingProfile) {
+          console.log('⚠️ Doctor profile detection safety timeout - stopping');
+          setLoadingProfile(false);
+          setError("Profile detection took too long. Please reload the page.");
+        }
+      }, 30000);
 
       try {
         // First try: Look up doctor by user_profile_id (auth user ID)
@@ -197,29 +213,25 @@ export default function DoctorDashboard() {
       } finally {
         if (isMounted) {
           clearTimeout(timeoutId);
+          clearTimeout(safetyTimeoutId);
           setLoadingProfile(false);
         }
       }
     };
 
-    if (user) {
+    if (!authLoading && user) {
       autoDetectDoctor();
-    } else {
-      // If no user yet, wait a bit and check again, but don't block forever
-      const waitForUser = setTimeout(() => {
-        if (isMounted && !user) {
-          console.log('⏱️ No user available after waiting');
-          setLoadingProfile(false);
-        }
-      }, 3000); // 3 seconds to wait for user
-      return () => clearTimeout(waitForUser);
+    } else if (!authLoading && !user) {
+      // Auth finished but no user
+      setLoadingProfile(false);
     }
 
     return () => {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
+      if (safetyTimeoutId) clearTimeout(safetyTimeoutId);
     };
-  }, [user]);
+  }, [user, authLoading]);
 
   // Load mothers assigned to this doctor
   const loadMothers = async () => {
