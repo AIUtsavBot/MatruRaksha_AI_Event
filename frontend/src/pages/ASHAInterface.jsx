@@ -159,6 +159,39 @@ export default function ASHAInterface() {
           }
         }
 
+        // Fourth try: If user has ASHA_WORKER role but no entry exists, auto-create one
+        if (user?.role === "ASHA_WORKER" && user?.id && user?.email) {
+          console.log("⚡ No ASHA profile found, auto-creating one for:", user.email);
+          try {
+            const { data: newEntry, error: insertError } = await supabase
+              .from("asha_workers")
+              .insert({
+                user_profile_id: user.id,
+                name: user.full_name || user.email.split("@")[0],
+                email: user.email,
+                phone: user.phone || "",
+                assigned_area: user.assigned_area || "",
+                is_active: true
+              })
+              .select()
+              .single();
+
+            if (!insertError && newEntry) {
+              if (isMounted) {
+                setAshaWorkerId(newEntry.id);
+                console.log("✅ Auto-created ASHA worker profile:", newEntry.name);
+                clearTimeout(timeoutId);
+                setLoadingProfile(false);
+              }
+              return;
+            } else {
+              console.error("Failed to auto-create ASHA profile:", insertError);
+            }
+          } catch (autoCreateError) {
+            console.error("Auto-create ASHA error:", autoCreateError);
+          }
+        }
+
         if (isMounted) {
           setError(
             "Your account is not linked to an ASHA worker profile. Contact admin."

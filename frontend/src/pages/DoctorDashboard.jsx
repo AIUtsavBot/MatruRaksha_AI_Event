@@ -148,6 +148,40 @@ export default function DoctorDashboard() {
           }
         }
 
+        // Fourth try: If user has DOCTOR role but no entry exists, auto-create one
+        if (user?.role === "DOCTOR" && user?.id && user?.email) {
+          console.log("⚡ No Doctor profile found, auto-creating one for:", user.email);
+          try {
+            const { data: newEntry, error: insertError } = await supabase
+              .from("doctors")
+              .insert({
+                user_profile_id: user.id,
+                name: user.full_name || user.email.split("@")[0],
+                email: user.email,
+                phone: user.phone || "",
+                assigned_area: user.assigned_area || "",
+                is_active: true
+              })
+              .select()
+              .single();
+
+            if (!insertError && newEntry) {
+              if (isMounted) {
+                setDoctorId(newEntry.id);
+                setDoctorInfo(newEntry);
+                console.log("✅ Auto-created Doctor profile:", newEntry.name);
+                clearTimeout(timeoutId);
+                setLoadingProfile(false);
+              }
+              return;
+            } else {
+              console.error("Failed to auto-create Doctor profile:", insertError);
+            }
+          } catch (autoCreateError) {
+            console.error("Auto-create Doctor error:", autoCreateError);
+          }
+        }
+
         if (isMounted) {
           setError(
             "Your account is not linked to a doctor profile. Contact admin."
