@@ -85,49 +85,64 @@ export default function ASHAInterface() {
   const [riskResult, setRiskResult] = useState(null);
 
   // Auto-detect ASHA worker by user_profile_id from asha_workers table
-  // Wait for authLoading to be false before starting detection
   useEffect(() => {
     let isMounted = true;
     let timeoutId = null;
-    let safetyTimeoutId = null;
 
     const autoDetectAsha = async () => {
       // Wait for auth to finish loading
       if (authLoading) {
-        console.log("⏳ Waiting for auth to finish loading...");
+        console.log("⏳ ASHA: Waiting for auth to finish loading...");
         return;
       }
 
       if (!user?.id && !user?.email) {
+        console.log("❌ ASHA: No user ID or email available");
         setLoadingProfile(false);
         return;
       }
 
-      // Log warning if query takes too long, but don't stop the query
+      console.log("🔍 ASHA: Starting profile detection for:", user.email);
+
+      // Set a timeout - if profile detection takes too long, show error
       timeoutId = setTimeout(() => {
         if (isMounted && loadingProfile) {
-          console.log('⏱️ ASHA profile detection taking longer than expected...');
-          // Don't set loadingProfile to false - let the query complete
-        }
-      }, 8000); // 8 second warning (doesn't stop the query)
-
-      // Safety timeout - stop loading after 30 seconds no matter what
-      safetyTimeoutId = setTimeout(() => {
-        if (isMounted && loadingProfile) {
-          console.log('⚠️ ASHA profile detection safety timeout - stopping');
+          console.log('⚠️ ASHA profile detection timeout - stopping');
           setLoadingProfile(false);
-          setError("Profile detection took too long. Please reload the page.");
+          setError("Profile detection took too long. Please try signing out and signing back in.");
         }
-      }, 30000);
+      }, 15000); // 15 second timeout
 
       try {
+        // CRITICAL: First ensure Supabase has a valid session before running any queries
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError || !sessionData?.session) {
+          console.log("❌ No valid Supabase session, trying to refresh...");
+          // Try to refresh the session
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError || !refreshData?.session) {
+            console.error("❌ Could not get valid Supabase session:", refreshError);
+            if (isMounted) {
+              setLoadingProfile(false);
+              setError("Session expired. Please sign out and sign back in.");
+            }
+            return;
+          }
+          console.log("✅ Session refreshed successfully");
+        } else {
+          console.log("✅ Valid Supabase session found");
+        }
+
+        // Now run the profile detection queries
         // First try: Look up ASHA worker by user_profile_id (auth user ID)
         if (user?.id) {
+          console.log("🔍 Looking up ASHA worker by user_profile_id:", user.id);
           const { data, error } = await supabase
             .from("asha_workers")
             .select("id, name, assigned_area, email")
             .eq("user_profile_id", user.id)
-            .single();
+            .maybeSingle();
 
           if (!error && data) {
             if (isMounted) {
@@ -142,11 +157,12 @@ export default function ASHAInterface() {
 
         // Second try: Look up by email
         if (user?.email) {
+          console.log("🔍 Looking up ASHA worker by email:", user.email);
           const { data, error } = await supabase
             .from("asha_workers")
             .select("id, name, assigned_area, email")
             .eq("email", user.email)
-            .single();
+            .maybeSingle();
 
           if (!error && data) {
             if (isMounted) {
@@ -161,6 +177,7 @@ export default function ASHAInterface() {
 
         // Third try: Match by name
         if (user?.full_name) {
+          console.log("🔍 Looking up ASHA worker by name:", user.full_name);
           const { data: byName } = await supabase
             .from("asha_workers")
             .select("id, name, assigned_area, email")
@@ -181,7 +198,6 @@ export default function ASHAInterface() {
         // Fourth try: If user has ASHA_WORKER role but no entry exists, auto-create one
         if (user?.role === "ASHA_WORKER" && user?.id && user?.email) {
           console.log("⚡ No ASHA profile found, auto-creating one for:", user.email);
-          console.log("📝 Creating with data:", { user_profile_id: user.id, name: user.full_name, email: user.email });
           try {
             const { data: newEntry, error: insertError } = await supabase
               .from("asha_workers")
@@ -206,28 +222,27 @@ export default function ASHAInterface() {
               return;
             } else {
               console.error("❌ Failed to auto-create ASHA profile:", insertError);
-              console.error("Error details:", JSON.stringify(insertError, null, 2));
             }
           } catch (autoCreateError) {
             console.error("❌ Auto-create ASHA error:", autoCreateError);
-            console.error("Exception message:", autoCreateError.message);
           }
         }
 
+        // No profile found
         if (isMounted) {
+          console.log("❌ No ASHA profile found for:", user.email);
           setError(
             "Your account is not linked to an ASHA worker profile. Contact admin."
           );
         }
       } catch (err) {
-        console.error("Auto-detect error:", err);
+        console.error("❌ Auto-detect error:", err);
         if (isMounted) {
-          setError("Could not find your ASHA profile");
+          setError("Could not find your ASHA profile: " + err.message);
         }
       } finally {
         if (isMounted) {
           clearTimeout(timeoutId);
-          clearTimeout(safetyTimeoutId);
           setLoadingProfile(false);
         }
       }
@@ -243,7 +258,6 @@ export default function ASHAInterface() {
     return () => {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
-      if (safetyTimeoutId) clearTimeout(safetyTimeoutId);
     };
   }, [user, authLoading]);
 

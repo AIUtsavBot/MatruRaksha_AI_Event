@@ -68,48 +68,64 @@ export default function DoctorDashboard() {
   const [successMsg, setSuccessMsg] = useState("");
 
   // Auto-detect doctor by user_profile_id from doctors table
-  // Wait for authLoading to be false before starting detection
   useEffect(() => {
     let isMounted = true;
     let timeoutId = null;
-    let safetyTimeoutId = null;
 
     const autoDetectDoctor = async () => {
       // Wait for auth to finish loading
       if (authLoading) {
-        console.log("⏳ Waiting for auth to finish loading...");
+        console.log("⏳ Doctor: Waiting for auth to finish loading...");
         return;
       }
 
       if (!user?.id && !user?.email) {
+        console.log("❌ Doctor: No user ID or email available");
         setLoadingProfile(false);
         return;
       }
 
-      // Log warning if query takes too long
+      console.log("🔍 Doctor: Starting profile detection for:", user.email);
+
+      // Set a timeout - if profile detection takes too long, show error
       timeoutId = setTimeout(() => {
         if (isMounted && loadingProfile) {
-          console.log('⏱️ Doctor profile detection taking longer than expected...');
-        }
-      }, 8000);
-
-      // Safety timeout - stop loading after 30 seconds no matter what
-      safetyTimeoutId = setTimeout(() => {
-        if (isMounted && loadingProfile) {
-          console.log('⚠️ Doctor profile detection safety timeout - stopping');
+          console.log('⚠️ Doctor profile detection timeout - stopping');
           setLoadingProfile(false);
-          setError("Profile detection took too long. Please reload the page.");
+          setError("Profile detection took too long. Please try signing out and signing back in.");
         }
-      }, 30000);
+      }, 15000); // 15 second timeout
 
       try {
+        // CRITICAL: First ensure Supabase has a valid session before running any queries
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError || !sessionData?.session) {
+          console.log("❌ No valid Supabase session, trying to refresh...");
+          // Try to refresh the session
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError || !refreshData?.session) {
+            console.error("❌ Could not get valid Supabase session:", refreshError);
+            if (isMounted) {
+              setLoadingProfile(false);
+              setError("Session expired. Please sign out and sign back in.");
+            }
+            return;
+          }
+          console.log("✅ Session refreshed successfully");
+        } else {
+          console.log("✅ Valid Supabase session found");
+        }
+
+        // Now run the profile detection queries
         // First try: Look up doctor by user_profile_id (auth user ID)
         if (user?.id) {
+          console.log("🔍 Looking up doctor by user_profile_id:", user.id);
           const { data, error } = await supabase
             .from("doctors")
             .select("id, name, phone, assigned_area, email")
             .eq("user_profile_id", user.id)
-            .single();
+            .maybeSingle();
 
           if (!error && data) {
             if (isMounted) {
@@ -125,11 +141,12 @@ export default function DoctorDashboard() {
 
         // Second try: Look up by email
         if (user?.email) {
+          console.log("🔍 Looking up doctor by email:", user.email);
           const { data, error } = await supabase
             .from("doctors")
             .select("id, name, phone, assigned_area, email")
             .eq("email", user.email)
-            .single();
+            .maybeSingle();
 
           if (!error && data) {
             if (isMounted) {
@@ -145,6 +162,7 @@ export default function DoctorDashboard() {
 
         // Third try: Match by name
         if (user?.full_name) {
+          console.log("🔍 Looking up doctor by name:", user.full_name);
           const { data: byName } = await supabase
             .from("doctors")
             .select("id, name, phone, assigned_area, email")
@@ -166,7 +184,6 @@ export default function DoctorDashboard() {
         // Fourth try: If user has DOCTOR role but no entry exists, auto-create one
         if (user?.role === "DOCTOR" && user?.id && user?.email) {
           console.log("⚡ No Doctor profile found, auto-creating one for:", user.email);
-          console.log("📝 Creating with data:", { user_profile_id: user.id, name: user.full_name, email: user.email });
           try {
             const { data: newEntry, error: insertError } = await supabase
               .from("doctors")
@@ -192,28 +209,27 @@ export default function DoctorDashboard() {
               return;
             } else {
               console.error("❌ Failed to auto-create Doctor profile:", insertError);
-              console.error("Error details:", JSON.stringify(insertError, null, 2));
             }
           } catch (autoCreateError) {
             console.error("❌ Auto-create Doctor error:", autoCreateError);
-            console.error("Exception message:", autoCreateError.message);
           }
         }
 
+        // No profile found
         if (isMounted) {
+          console.log("❌ No Doctor profile found for:", user.email);
           setError(
             "Your account is not linked to a doctor profile. Contact admin."
           );
         }
       } catch (err) {
-        console.error("Auto-detect error:", err);
+        console.error("❌ Auto-detect error:", err);
         if (isMounted) {
-          setError("Could not find your doctor profile");
+          setError("Could not find your doctor profile: " + err.message);
         }
       } finally {
         if (isMounted) {
           clearTimeout(timeoutId);
-          clearTimeout(safetyTimeoutId);
           setLoadingProfile(false);
         }
       }
@@ -229,7 +245,6 @@ export default function DoctorDashboard() {
     return () => {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
-      if (safetyTimeoutId) clearTimeout(safetyTimeoutId);
     };
   }, [user, authLoading]);
 
