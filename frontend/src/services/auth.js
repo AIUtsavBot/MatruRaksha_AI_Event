@@ -86,8 +86,55 @@ const updateActivity = () => {
   localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString())
 }
 
+// Wait for Supabase to be ready (session restored from localStorage)
+// This is crucial for page reloads - Supabase needs time to restore the session
+let supabaseReady = false
+let supabaseReadyPromise = null
+
+const waitForSupabaseReady = (timeoutMs = 5000) => {
+  if (supabaseReady) {
+    return Promise.resolve(true)
+  }
+
+  if (supabaseReadyPromise) {
+    return supabaseReadyPromise
+  }
+
+  supabaseReadyPromise = new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      console.log('⏱️ Supabase ready timeout - proceeding anyway')
+      supabaseReady = true
+      resolve(true)
+    }, timeoutMs)
+
+    // Listen for the first auth state change - this means Supabase is ready
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('✅ Supabase ready - auth state changed:', event)
+      clearTimeout(timeout)
+      supabaseReady = true
+      subscription.unsubscribe()
+      resolve(true)
+    })
+
+    // Also check if we can get session immediately (already ready)
+    supabase.auth.getSession().then(({ data }) => {
+      if (data?.session || supabaseReady) {
+        console.log('✅ Supabase ready - session available immediately')
+        clearTimeout(timeout)
+        supabaseReady = true
+        subscription.unsubscribe()
+        resolve(true)
+      }
+    }).catch(() => {
+      // Ignore errors, wait for onAuthStateChange
+    })
+  })
+
+  return supabaseReadyPromise
+}
+
 // Export for use in AuthContext
-export { cacheUser, getCachedUser, updateActivity, IDLE_TIMEOUT_MS }
+export { cacheUser, getCachedUser, updateActivity, IDLE_TIMEOUT_MS, waitForSupabaseReady }
 
 /**
  * Authentication Service

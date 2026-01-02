@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { supabase } from "../services/auth.js";
+import { supabase, waitForSupabaseReady } from "../services/auth.js";
 import { useAuth } from "../contexts/AuthContext";
 import PatientChatHistory from "../components/PatientChatHistory.jsx";
 import DocumentManager from "../components/DocumentManager.jsx";
@@ -104,37 +104,25 @@ export default function ASHAInterface() {
 
       console.log("🔍 ASHA: Starting profile detection for:", user.email);
 
-      // Set a timeout - if profile detection takes too long, show error
+      // Create AbortController to cancel requests on timeout
+      const abortController = new AbortController();
+
+      // Set a timeout - if profile detection takes too long, abort and show error
       timeoutId = setTimeout(() => {
         if (isMounted && loadingProfile) {
-          console.log('⚠️ ASHA profile detection timeout - stopping');
+          console.log('⚠️ ASHA profile detection timeout - aborting');
+          abortController.abort();
           setLoadingProfile(false);
           setError("Profile detection took too long. Please try signing out and signing back in.");
         }
-      }, 15000); // 15 second timeout
+      }, 10000); // 10 second timeout
 
       try {
-        // CRITICAL: First ensure Supabase has a valid session before running any queries
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        // CRITICAL: Wait for Supabase to restore session from localStorage
+        console.log("⏳ Waiting for Supabase to be ready...");
+        await waitForSupabaseReady(5000);
+        console.log("✅ Supabase is ready, running queries...");
 
-        if (sessionError || !sessionData?.session) {
-          console.log("❌ No valid Supabase session, trying to refresh...");
-          // Try to refresh the session
-          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-          if (refreshError || !refreshData?.session) {
-            console.error("❌ Could not get valid Supabase session:", refreshError);
-            if (isMounted) {
-              setLoadingProfile(false);
-              setError("Session expired. Please sign out and sign back in.");
-            }
-            return;
-          }
-          console.log("✅ Session refreshed successfully");
-        } else {
-          console.log("✅ Valid Supabase session found");
-        }
-
-        // Now run the profile detection queries
         // First try: Look up ASHA worker by user_profile_id (auth user ID)
         if (user?.id) {
           console.log("🔍 Looking up ASHA worker by user_profile_id:", user.id);
