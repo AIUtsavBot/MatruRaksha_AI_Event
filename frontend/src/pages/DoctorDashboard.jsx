@@ -150,6 +150,7 @@ export default function DoctorDashboard() {
         // Fourth try: If user has DOCTOR role but no entry exists, auto-create one
         if (user?.role === "DOCTOR" && user?.id && user?.email) {
           console.log("⚡ No Doctor profile found, auto-creating one for:", user.email);
+          console.log("📝 Creating with data:", { user_profile_id: user.id, name: user.full_name, email: user.email });
           try {
             const { data: newEntry, error: insertError } = await supabase
               .from("doctors")
@@ -174,10 +175,12 @@ export default function DoctorDashboard() {
               }
               return;
             } else {
-              console.error("Failed to auto-create Doctor profile:", insertError);
+              console.error("❌ Failed to auto-create Doctor profile:", insertError);
+              console.error("Error details:", JSON.stringify(insertError, null, 2));
             }
           } catch (autoCreateError) {
-            console.error("Auto-create Doctor error:", autoCreateError);
+            console.error("❌ Auto-create Doctor error:", autoCreateError);
+            console.error("Exception message:", autoCreateError.message);
           }
         }
 
