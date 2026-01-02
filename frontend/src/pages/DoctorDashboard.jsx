@@ -78,14 +78,13 @@ export default function DoctorDashboard() {
         return;
       }
 
-      // Set a timeout to prevent infinite loading (8s for slow production connections)
+      // Log warning if query takes too long, but don't stop the query
       timeoutId = setTimeout(() => {
         if (isMounted && loadingProfile) {
-          console.log('⏱️ Doctor profile detection timeout - query took too long');
-          setLoadingProfile(false);
-          // Don't set error here - let the actual query result determine the message
+          console.log('⏱️ Doctor profile detection taking longer than expected...');
+          // Don't set loadingProfile to false - let the query complete
         }
-      }, 8000); // 8 second timeout for slow Supabase cold starts
+      }, 8000); // 8 second warning (doesn't stop the query)
 
       try {
         // First try: Look up doctor by user_profile_id (auth user ID)
