@@ -48,13 +48,20 @@ export const AuthProvider = ({ children }) => {
 
     // Verify session in background with timeout (don't block page load forever)
     const verifySession = async () => {
+      // If we have a cached user with a valid role, stop loading immediately
+      // and verify session in background
+      if (cachedUser?.role) {
+        console.log('✅ Cached user with role found, loading instantly')
+        setLoading(false)
+      }
+
       // Set a timeout - if session check takes too long, stop loading anyway
       timeoutId = setTimeout(() => {
         if (mounted) {
           console.log('⏱️ Session verification timeout - stopping loading')
           setLoading(false)
         }
-      }, 5000) // 5 second timeout
+      }, 2000) // 2 second timeout (reduced from 5s for faster production loads)
 
       try {
         const currentSession = await authService.getSession()
@@ -185,15 +192,17 @@ export const AuthProvider = ({ children }) => {
 
   const signOut = async () => {
     try {
-      setLoading(true)
-      await authService.signOut()
+      // Clear state immediately - don't set loading to avoid spinner during signout
       setUser(null)
       setSession(null)
       cacheUser(null)
+      userRef.current = null
+
+      // Call signOut in background - state is already cleared
+      await authService.signOut()
     } catch (error) {
-      throw error
-    } finally {
-      setLoading(false)
+      console.error('Sign out error:', error)
+      // State is already cleared, just log the error
     }
   }
 

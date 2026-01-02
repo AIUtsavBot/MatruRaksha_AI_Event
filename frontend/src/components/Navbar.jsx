@@ -1,10 +1,16 @@
 import React from 'react'
 import { Heart } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Navbar() {
   const { user, isAuthenticated, signOut } = useAuth()
+  const navigate = useNavigate()
+
+  const handleSignOut = async () => {
+    await signOut()
+    navigate('/auth/login', { replace: true })
+  }
 
   const roleColor = user?.role === 'ADMIN'
     ? 'bg-red-600'
@@ -50,7 +56,7 @@ export default function Navbar() {
                 <span className={`px-2 py-1 rounded text-xs ${roleColor}`}>{user?.role}</span>
                 <span className="text-white/90 text-sm">{user?.full_name || user?.email}</span>
                 <button
-                  onClick={signOut}
+                  onClick={handleSignOut}
                   className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm"
                 >
                   Sign Out

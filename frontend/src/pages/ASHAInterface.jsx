@@ -83,11 +83,23 @@ export default function ASHAInterface() {
 
   // Auto-detect ASHA worker by user_profile_id from asha_workers table
   useEffect(() => {
+    let isMounted = true;
+    let timeoutId = null;
+
     const autoDetectAsha = async () => {
       if (!user?.id && !user?.email) {
         setLoadingProfile(false);
         return;
       }
+
+      // Set a timeout to prevent infinite loading
+      timeoutId = setTimeout(() => {
+        if (isMounted && loadingProfile) {
+          console.log('⏱️ ASHA profile detection timeout');
+          setLoadingProfile(false);
+          setError("Profile detection timed out. Please reload the page.");
+        }
+      }, 3000); // 3 second timeout
 
       try {
         // First try: Look up ASHA worker by user_profile_id (auth user ID)
@@ -99,9 +111,12 @@ export default function ASHAInterface() {
             .single();
 
           if (!error && data) {
-            setAshaWorkerId(data.id);
-            console.log("✅ Found ASHA worker by user_profile_id:", data.name);
-            setLoadingProfile(false);
+            if (isMounted) {
+              setAshaWorkerId(data.id);
+              console.log("✅ Found ASHA worker by user_profile_id:", data.name);
+              clearTimeout(timeoutId);
+              setLoadingProfile(false);
+            }
             return;
           }
         }
@@ -115,9 +130,12 @@ export default function ASHAInterface() {
             .single();
 
           if (!error && data) {
-            setAshaWorkerId(data.id);
-            console.log("✅ Found ASHA worker by email:", data.name);
-            setLoadingProfile(false);
+            if (isMounted) {
+              setAshaWorkerId(data.id);
+              console.log("✅ Found ASHA worker by email:", data.name);
+              clearTimeout(timeoutId);
+              setLoadingProfile(false);
+            }
             return;
           }
         }
@@ -131,27 +149,50 @@ export default function ASHAInterface() {
             .limit(1);
 
           if (byName && byName[0]) {
-            setAshaWorkerId(byName[0].id);
-            console.log("✅ Found ASHA worker by name:", byName[0].name);
-            setLoadingProfile(false);
+            if (isMounted) {
+              setAshaWorkerId(byName[0].id);
+              console.log("✅ Found ASHA worker by name:", byName[0].name);
+              clearTimeout(timeoutId);
+              setLoadingProfile(false);
+            }
             return;
           }
         }
 
-        setError(
-          "Your account is not linked to an ASHA worker profile. Contact admin."
-        );
+        if (isMounted) {
+          setError(
+            "Your account is not linked to an ASHA worker profile. Contact admin."
+          );
+        }
       } catch (err) {
         console.error("Auto-detect error:", err);
-        setError("Could not find your ASHA profile");
+        if (isMounted) {
+          setError("Could not find your ASHA profile");
+        }
       } finally {
-        setLoadingProfile(false);
+        if (isMounted) {
+          clearTimeout(timeoutId);
+          setLoadingProfile(false);
+        }
       }
     };
 
     if (user) {
       autoDetectAsha();
+    } else {
+      // If no user yet, wait a bit and check again, but don't block forever
+      const waitForUser = setTimeout(() => {
+        if (isMounted && !user) {
+          setLoadingProfile(false);
+        }
+      }, 2000);
+      return () => clearTimeout(waitForUser);
     }
+
+    return () => {
+      isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [user]);
 
   // Load data when ASHA ID is available
@@ -426,8 +467,8 @@ export default function ASHAInterface() {
               setMainView("register");
             }}
             className={`flex-1 py-3 text-xs font-semibold flex flex-col items-center gap-1 ${mainView === "register"
-                ? "text-pink-600 bg-pink-50"
-                : "text-gray-500"
+              ? "text-pink-600 bg-pink-50"
+              : "text-gray-500"
               }`}
           >
             <UserPlus className="w-4 h-4" />
@@ -439,8 +480,8 @@ export default function ASHAInterface() {
               setMainView("assess");
             }}
             className={`flex-1 py-3 text-xs font-semibold flex flex-col items-center gap-1 ${mainView === "assess"
-                ? "text-green-600 bg-green-50"
-                : "text-gray-500"
+              ? "text-green-600 bg-green-50"
+              : "text-gray-500"
               }`}
           >
             <ClipboardCheck className="w-4 h-4" />
@@ -452,8 +493,8 @@ export default function ASHAInterface() {
               setMainView("stats");
             }}
             className={`flex-1 py-3 text-xs font-semibold flex flex-col items-center gap-1 ${mainView === "stats"
-                ? "text-green-600 bg-green-50"
-                : "text-gray-500"
+              ? "text-green-600 bg-green-50"
+              : "text-gray-500"
               }`}
           >
             <BarChart2 className="w-4 h-4" />
@@ -523,8 +564,8 @@ export default function ASHAInterface() {
                     setMainView("mother");
                   }}
                   className={`p-3 rounded-lg border cursor-pointer transition-all ${selected?.id === m.id
-                      ? "border-green-500 bg-green-50"
-                      : "border-gray-200 hover:border-green-300"
+                    ? "border-green-500 bg-green-50"
+                    : "border-gray-200 hover:border-green-300"
                     }`}
                 >
                   <div className="flex items-center justify-between">
@@ -568,10 +609,10 @@ export default function ASHAInterface() {
                 </div>
                 <div
                   className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 ${riskMap[selected.id] === "HIGH"
-                      ? "bg-red-100 text-red-700"
-                      : riskMap[selected.id] === "MODERATE"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : "bg-green-100 text-green-700"
+                    ? "bg-red-100 text-red-700"
+                    : riskMap[selected.id] === "MODERATE"
+                      ? "bg-yellow-100 text-yellow-700"
+                      : "bg-green-100 text-green-700"
                     }`}
                 >
                   <span className="text-xl">
@@ -639,8 +680,8 @@ export default function ASHAInterface() {
                   <button
                     onClick={() => setMotherViewTab("history")}
                     className={`px-3 py-1 rounded-lg text-sm font-semibold ${motherViewTab === "history"
-                        ? "bg-white/20"
-                        : "opacity-70 hover:opacity-100"
+                      ? "bg-white/20"
+                      : "opacity-70 hover:opacity-100"
                       }`}
                   >
                     📊 Assessments ({motherAssessments.length})
@@ -648,8 +689,8 @@ export default function ASHAInterface() {
                   <button
                     onClick={() => setMotherViewTab("documents")}
                     className={`px-3 py-1 rounded-lg text-sm font-semibold ${motherViewTab === "documents"
-                        ? "bg-white/20"
-                        : "opacity-70 hover:opacity-100"
+                      ? "bg-white/20"
+                      : "opacity-70 hover:opacity-100"
                       }`}
                   >
                     📄 Documents
@@ -657,8 +698,8 @@ export default function ASHAInterface() {
                   <button
                     onClick={() => setMotherViewTab("chat")}
                     className={`px-3 py-1 rounded-lg text-sm font-semibold ${motherViewTab === "chat"
-                        ? "bg-white/20"
-                        : "opacity-70 hover:opacity-100"
+                      ? "bg-white/20"
+                      : "opacity-70 hover:opacity-100"
                       }`}
                   >
                     💬 Chat History
@@ -678,10 +719,10 @@ export default function ASHAInterface() {
                           <div
                             key={a.id || idx}
                             className={`p-4 rounded-lg border-2 ${a.risk_level === "HIGH"
-                                ? "bg-red-50 border-red-200"
-                                : a.risk_level === "MODERATE"
-                                  ? "bg-yellow-50 border-yellow-200"
-                                  : "bg-green-50 border-green-200"
+                              ? "bg-red-50 border-red-200"
+                              : a.risk_level === "MODERATE"
+                                ? "bg-yellow-50 border-yellow-200"
+                                : "bg-green-50 border-green-200"
                               }`}
                           >
                             <div className="flex justify-between items-start mb-2">
@@ -690,10 +731,10 @@ export default function ASHAInterface() {
                               </p>
                               <span
                                 className={`px-2 py-1 rounded-full text-xs font-bold ${a.risk_level === "HIGH"
-                                    ? "bg-red-200 text-red-800"
-                                    : a.risk_level === "MODERATE"
-                                      ? "bg-yellow-200 text-yellow-800"
-                                      : "bg-green-200 text-green-800"
+                                  ? "bg-red-200 text-red-800"
+                                  : a.risk_level === "MODERATE"
+                                    ? "bg-yellow-200 text-yellow-800"
+                                    : "bg-green-200 text-green-800"
                                   }`}
                               >
                                 {getRiskIcon(a.risk_level)} {a.risk_level} (
@@ -935,10 +976,10 @@ export default function ASHAInterface() {
                 {riskResult && (
                   <div
                     className={`mt-6 p-5 rounded-lg border-2 ${riskResult.risk_level === "HIGH"
-                        ? "bg-red-50 border-red-300"
-                        : riskResult.risk_level === "MODERATE"
-                          ? "bg-yellow-50 border-yellow-300"
-                          : "bg-green-50 border-green-300"
+                      ? "bg-red-50 border-red-300"
+                      : riskResult.risk_level === "MODERATE"
+                        ? "bg-yellow-50 border-yellow-300"
+                        : "bg-green-50 border-green-300"
                       }`}
                   >
                     <div className="flex items-center gap-3 mb-3">
@@ -1071,10 +1112,10 @@ export default function ASHAInterface() {
                               </div>
                               <span
                                 className={`px-3 py-1 rounded-full text-xs font-bold ${a.risk_level === "HIGH"
-                                    ? "bg-red-100 text-red-700"
-                                    : a.risk_level === "MODERATE"
-                                      ? "bg-yellow-100 text-yellow-700"
-                                      : "bg-green-100 text-green-700"
+                                  ? "bg-red-100 text-red-700"
+                                  : a.risk_level === "MODERATE"
+                                    ? "bg-yellow-100 text-yellow-700"
+                                    : "bg-green-100 text-green-700"
                                   }`}
                               >
                                 {getRiskIcon(a.risk_level)} {a.risk_level}
@@ -1129,10 +1170,10 @@ export default function ASHAInterface() {
 
                 <div
                   className={`p-4 rounded-lg mb-6 ${selectedAssessment.risk_level === "HIGH"
-                      ? "bg-red-50"
-                      : selectedAssessment.risk_level === "MODERATE"
-                        ? "bg-yellow-50"
-                        : "bg-green-50"
+                    ? "bg-red-50"
+                    : selectedAssessment.risk_level === "MODERATE"
+                      ? "bg-yellow-50"
+                      : "bg-green-50"
                     }`}
                 >
                   <div className="flex justify-between items-center">

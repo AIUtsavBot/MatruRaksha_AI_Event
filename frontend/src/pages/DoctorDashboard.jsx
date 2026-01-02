@@ -69,11 +69,23 @@ export default function DoctorDashboard() {
 
   // Auto-detect doctor by user_profile_id from doctors table
   useEffect(() => {
+    let isMounted = true;
+    let timeoutId = null;
+
     const autoDetectDoctor = async () => {
       if (!user?.id && !user?.email) {
         setLoadingProfile(false);
         return;
       }
+
+      // Set a timeout to prevent infinite loading
+      timeoutId = setTimeout(() => {
+        if (isMounted && loadingProfile) {
+          console.log('⏱️ Doctor profile detection timeout');
+          setLoadingProfile(false);
+          setError("Profile detection timed out. Please reload the page.");
+        }
+      }, 3000); // 3 second timeout
 
       try {
         // First try: Look up doctor by user_profile_id (auth user ID)
@@ -85,10 +97,13 @@ export default function DoctorDashboard() {
             .single();
 
           if (!error && data) {
-            setDoctorId(data.id);
-            setDoctorInfo(data);
-            console.log("✅ Found doctor by user_profile_id:", data.name);
-            setLoadingProfile(false);
+            if (isMounted) {
+              setDoctorId(data.id);
+              setDoctorInfo(data);
+              console.log("✅ Found doctor by user_profile_id:", data.name);
+              clearTimeout(timeoutId);
+              setLoadingProfile(false);
+            }
             return;
           }
         }
@@ -102,10 +117,13 @@ export default function DoctorDashboard() {
             .single();
 
           if (!error && data) {
-            setDoctorId(data.id);
-            setDoctorInfo(data);
-            console.log("✅ Found doctor by email:", data.name);
-            setLoadingProfile(false);
+            if (isMounted) {
+              setDoctorId(data.id);
+              setDoctorInfo(data);
+              console.log("✅ Found doctor by email:", data.name);
+              clearTimeout(timeoutId);
+              setLoadingProfile(false);
+            }
             return;
           }
         }
@@ -119,28 +137,51 @@ export default function DoctorDashboard() {
             .limit(1);
 
           if (byName && byName[0]) {
-            setDoctorId(byName[0].id);
-            setDoctorInfo(byName[0]);
-            console.log("✅ Found doctor by name:", byName[0].name);
-            setLoadingProfile(false);
+            if (isMounted) {
+              setDoctorId(byName[0].id);
+              setDoctorInfo(byName[0]);
+              console.log("✅ Found doctor by name:", byName[0].name);
+              clearTimeout(timeoutId);
+              setLoadingProfile(false);
+            }
             return;
           }
         }
 
-        setError(
-          "Your account is not linked to a doctor profile. Contact admin."
-        );
+        if (isMounted) {
+          setError(
+            "Your account is not linked to a doctor profile. Contact admin."
+          );
+        }
       } catch (err) {
         console.error("Auto-detect error:", err);
-        setError("Could not find your doctor profile");
+        if (isMounted) {
+          setError("Could not find your doctor profile");
+        }
       } finally {
-        setLoadingProfile(false);
+        if (isMounted) {
+          clearTimeout(timeoutId);
+          setLoadingProfile(false);
+        }
       }
     };
 
     if (user) {
       autoDetectDoctor();
+    } else {
+      // If no user yet, wait a bit and check again, but don't block forever
+      const waitForUser = setTimeout(() => {
+        if (isMounted && !user) {
+          setLoadingProfile(false);
+        }
+      }, 2000);
+      return () => clearTimeout(waitForUser);
     }
+
+    return () => {
+      isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [user]);
 
   // Load mothers assigned to this doctor
@@ -373,8 +414,8 @@ export default function DoctorDashboard() {
               setSelected(null);
             }}
             className={`flex-1 py-3 text-xs font-semibold flex flex-col items-center gap-1 ${mainView === "patients"
-                ? "text-blue-600 bg-blue-50"
-                : "text-gray-500"
+              ? "text-blue-600 bg-blue-50"
+              : "text-gray-500"
               }`}
           >
             <Stethoscope className="w-4 h-4" />
@@ -386,8 +427,8 @@ export default function DoctorDashboard() {
               setSelected(null);
             }}
             className={`flex-1 py-3 text-xs font-semibold flex flex-col items-center gap-1 ${mainView === "register"
-                ? "text-pink-600 bg-pink-50"
-                : "text-gray-500"
+              ? "text-pink-600 bg-pink-50"
+              : "text-gray-500"
               }`}
           >
             <UserPlus className="w-4 h-4" />
@@ -435,8 +476,8 @@ export default function DoctorDashboard() {
                     key={m.id}
                     onClick={() => setSelected(m)}
                     className={`p-4 rounded-lg border-2 cursor-pointer transition-all transform hover:scale-102 ${selected?.id === m.id
-                        ? "border-blue-600 bg-blue-50 shadow-md"
-                        : `border-gray-200 ${getRiskColor(risk)}`
+                      ? "border-blue-600 bg-blue-50 shadow-md"
+                      : `border-gray-200 ${getRiskColor(risk)}`
                       }`}
                   >
                     <div className="flex items-start justify-between">
@@ -454,10 +495,10 @@ export default function DoctorDashboard() {
                     <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between text-xs">
                       <span
                         className={`px-2 py-1 rounded-full font-semibold ${risk === "HIGH"
-                            ? "bg-red-100 text-red-700"
-                            : risk === "MODERATE"
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-green-100 text-green-700"
+                          ? "bg-red-100 text-red-700"
+                          : risk === "MODERATE"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-green-100 text-green-700"
                           }`}
                       >
                         {risk}
@@ -498,10 +539,10 @@ export default function DoctorDashboard() {
                 </div>
                 <div
                   className={`px-5 py-3 rounded-lg font-semibold flex items-center gap-2 ${riskMap[selected.id] === "HIGH"
-                      ? "bg-red-100 text-red-700"
-                      : riskMap[selected.id] === "MODERATE"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : "bg-green-100 text-green-700"
+                    ? "bg-red-100 text-red-700"
+                    : riskMap[selected.id] === "MODERATE"
+                      ? "bg-yellow-100 text-yellow-700"
+                      : "bg-green-100 text-green-700"
                     }`}
                 >
                   <span className="text-xl">
@@ -516,8 +557,8 @@ export default function DoctorDashboard() {
                 <button
                   onClick={() => setActiveTab("history")}
                   className={`px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-2 ${activeTab === "history"
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-700"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700"
                     }`}
                 >
                   <FileText className="w-4 h-4" /> Assessment History
@@ -525,8 +566,8 @@ export default function DoctorDashboard() {
                 <button
                   onClick={() => setActiveTab("documents")}
                   className={`px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-2 ${activeTab === "documents"
-                      ? "bg-indigo-600 text-white"
-                      : "bg-gray-100 text-gray-700"
+                    ? "bg-indigo-600 text-white"
+                    : "bg-gray-100 text-gray-700"
                     }`}
                 >
                   <Upload className="w-4 h-4" /> Documents
@@ -534,8 +575,8 @@ export default function DoctorDashboard() {
                 <button
                   onClick={() => setActiveTab("chat")}
                   className={`px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-2 ${activeTab === "chat"
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-100 text-gray-700"
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-100 text-gray-700"
                     }`}
                 >
                   <MessageCircle className="w-4 h-4" /> Chat History
@@ -543,8 +584,8 @@ export default function DoctorDashboard() {
                 <button
                   onClick={() => setActiveTab("consultation")}
                   className={`px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-2 ${activeTab === "consultation"
-                      ? "bg-purple-600 text-white"
-                      : "bg-gray-100 text-gray-700"
+                    ? "bg-purple-600 text-white"
+                    : "bg-gray-100 text-gray-700"
                     }`}
                 >
                   <ClipboardList className="w-4 h-4" /> Consultation Details
@@ -637,10 +678,10 @@ export default function DoctorDashboard() {
                             <div
                               key={a.id || idx}
                               className={`p-4 rounded-lg border-2 ${a.risk_level === "HIGH"
-                                  ? "bg-red-50 border-red-200"
-                                  : a.risk_level === "MODERATE"
-                                    ? "bg-yellow-50 border-yellow-200"
-                                    : "bg-green-50 border-green-200"
+                                ? "bg-red-50 border-red-200"
+                                : a.risk_level === "MODERATE"
+                                  ? "bg-yellow-50 border-yellow-200"
+                                  : "bg-green-50 border-green-200"
                                 }`}
                             >
                               <div className="flex justify-between items-start mb-3">
@@ -652,10 +693,10 @@ export default function DoctorDashboard() {
                                 </div>
                                 <div
                                   className={`px-3 py-1 rounded-full text-sm font-bold ${a.risk_level === "HIGH"
-                                      ? "bg-red-200 text-red-800"
-                                      : a.risk_level === "MODERATE"
-                                        ? "bg-yellow-200 text-yellow-800"
-                                        : "bg-green-200 text-green-800"
+                                    ? "bg-red-200 text-red-800"
+                                    : a.risk_level === "MODERATE"
+                                      ? "bg-yellow-200 text-yellow-800"
+                                      : "bg-green-200 text-green-800"
                                     }`}
                                 >
                                   {getRiskEmoji(a.risk_level)} {a.risk_level} (
